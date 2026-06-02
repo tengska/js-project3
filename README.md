@@ -6,8 +6,8 @@ Selainpohjainen sovellus, joka kokoaa Suomen gravity-maastopyöräilytapahtumat 
 
 ## Sovelluksen linkki
 
-- GitHub: [tengska/gravity-calendar](https://github.com/tengska/gravity-calendar)
-- Netlify: [gravitycalendar.netlify.app](https://gravitycalendar.netlify.app/)
+- GitHub: [tengska/js-project3](https://github.com/tengska/js-project3)
+- Netlify: [karlanjsprojekti3.netlify.app](https://karlanjsprojekti3.netlify.app)
 
 ## Ominaisuudet
 
@@ -109,19 +109,19 @@ Selainpohjainen sovellus, joka kokoaa Suomen gravity-maastopyöräilytapahtumat 
 | Koodi on kommentoitu | 1 | Suomenkieliset JSDoc-kommentit jokaiselle funktiolle ja loogiselle osiolle |
 | jQuery: kuuntelijat, AJAX, DOM | 3 | Kaikki DOM-käsittely, event handlerit ja API-kutsut toteutettu jQueryllä |
 | UI-kirjasto (Bootstrap) | 1 | Bootstrap 5: modaalit, napit, lomakkeet, grid, spinner, ikonit |
-| Koodi GitHubissa | 1 | Julkaistu GitHubissa |
-| Sovellus Netlifyssä | 1 | Julkaistu Netlifyssä |
+| Koodi GitHubissa | 1 | Julkaistu GitHubissa: [github.com/tengska/js-project3](https://github.com/tengska/js-project3) |
+| Sovellus Netlifyssä | 1 | Julkaistu Netlifyssä: [karlanjsprojekti3.netlify.app](https://karlanjsprojekti3.netlify.app) |
 | Videodemo | 1 | (Tehdään erikseen) |
 | Projektiraportti ja README | 2 | Tämä tiedosto |
 | **Yhteensä** | **10** | |
 
 ## Tekijä
 
-Karla Tengström
+Karla Tengström (käytin Claude tekoälyä apurina)
 
 ## Projektiin käytetty aika
 
-~3 päivää (sisältäen alkuperäisen projektin kehityksen ja jQuery/Bootstrap-konversion)
+~1 päivä (sisältäen jQuery/Bootstrap-konversion, mutta poislukien alkuperäisen projektin kehityksen)
 
 ## Tulevaisuuden parannusehdotukset
 
