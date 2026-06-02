@@ -1,50 +1,55 @@
 <!DOCTYPE html>
-<html lang="fi">
+<html lang="fi" data-bs-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gravity Calendar — Suomen Gravity MTB Tapahtumat 2026</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d0f0e'/%3E%3Cpath d='M16 26L6 8h20z' fill='%237ec850'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css">
-  <!-- Leaflet map -->
+
+  <!-- Bootstrap 5 CSS (UI-kirjasto) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <!-- Leaflet-kartta -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <!-- AOS (Animate On Scroll) -kirjasto -->
+  <link href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css" rel="stylesheet">
+  <!-- Oma tyylitiedosto -->
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <!-- ===== HEADER ===== -->
-  <header class="site-header">
-    <div class="header-inner">
-      <a href="/" class="logo">
-        <span class="logo-icon">▼</span>
-        <span class="logo-text">Gravity<span class="logo-accent">Cal</span></span>
-      </a>
-      <p class="tagline">Suomen Gravity MTB Tapahtumat 2026</p>
-    </div>
+  <header class="site-header text-center border-bottom border-secondary py-4 px-3">
+    <a href="/" class="d-inline-flex align-items-center gap-2 text-decoration-none mb-1" id="logo-link">
+      <span class="logo-icon">▼</span>
+      <span class="logo-text">Gravity<span class="text-accent">Cal</span></span>
+    </a>
+    <p class="tagline mb-0">Suomen Gravity MTB Tapahtumat 2026</p>
   </header>
 
-  <!-- ===== MOBILE SEGMENT (scrolls away) ===== -->
-  <div class="content-segment content-segment-mobile" id="content-segment-mobile">
+  <!-- ===== MOBIILI SEGMENTOINTI (scrollaa pois näkyvistä) ===== -->
+  <div class="content-segment content-segment-mobile d-none d-md-none" id="content-segment-mobile">
     <button class="segment-btn" data-segment="races">Kisat</button>
     <button class="segment-btn" data-segment="events">Tapahtumat</button>
     <button class="segment-btn active" data-segment="all">Kaikki</button>
   </div>
 
-  <!-- ===== FILTERS (sticky) ===== -->
+  <!-- ===== SUODATTIMET (sticky) ===== -->
   <section class="filters-section" id="filters-section">
-    <!-- Mobile-only toggle — collapses/expands the filter bar -->
-    <button class="filter-toggle" id="filter-toggle">
-      <span>Suodattimet <span class="filter-badge hidden" id="filter-badge"></span></span>
-      <span class="filter-toggle-icon" id="filter-toggle-icon">▾</span>
+    <!-- Mobiili-toggle — avaa/sulkee suodatinpalkin -->
+    <button class="filter-toggle d-md-none" id="filter-toggle">
+      <span>Suodattimet <span class="filter-badge d-none" id="filter-badge"></span></span>
+      <span class="filter-toggle-icon" id="filter-toggle-icon"><i class="bi bi-chevron-down"></i></span>
     </button>
     <div class="filters-inner">
 
-      <!-- Desktop-only: segmented control inline with filters -->
-      <div class="filter-group filter-group-segment">
+      <!-- Näyttötila (desktop) -->
+      <div class="filter-group filter-group-segment d-none d-md-flex">
         <label>Näytä</label>
         <div class="content-segment content-segment-desktop" id="content-segment-desktop">
           <button class="segment-btn" data-segment="races">Kisat</button>
@@ -53,7 +58,7 @@
         </div>
       </div>
 
-      <!-- Series filter -->
+      <!-- Sarja-suodatin -->
       <div class="filter-group filter-group-series">
         <label>Sarja</label>
         <div class="multi-select" id="filter-series">
@@ -67,7 +72,7 @@
         </div>
       </div>
 
-      <!-- Discipline filter -->
+      <!-- Laji-suodatin -->
       <div class="filter-group filter-group-discipline">
         <label>Laji</label>
         <div class="multi-select" id="filter-discipline">
@@ -80,7 +85,7 @@
         </div>
       </div>
 
-      <!-- Month filter -->
+      <!-- Kuukausi-suodatin -->
       <div class="filter-group">
         <label>Kuukausi</label>
         <div class="multi-select" id="filter-month">
@@ -97,7 +102,7 @@
         </div>
       </div>
 
-      <!-- Status filter -->
+      <!-- Tila-suodatin -->
       <div class="filter-group">
         <label>Tila</label>
         <div class="multi-select" id="filter-status">
@@ -110,194 +115,241 @@
         </div>
       </div>
 
-      <!-- Search + Reset (wrap together) -->
+      <!-- Haku + Tyhjennä -->
       <div class="filter-tail">
         <div class="filter-group filter-search">
           <label for="filter-search">Haku</label>
           <input type="text" id="filter-search" placeholder="Paikka, nimi...">
         </div>
-        <button class="btn-reset-filters hidden" id="btn-reset-filters">Tyhjennä</button>
+        <button class="btn-reset-filters d-none" id="btn-reset-filters">Tyhjennä</button>
       </div>
 
     </div>
   </section>
 
-  <!-- ===== EVENTS COUNT & VIEW TOGGLE ===== -->
-  <section class="results-info">
-    <p id="results-count"></p>
-    <div class="results-controls">
-      <select id="filter-sort" class="sort-select" title="Järjestys">
-        <option value="date-asc">Päivämäärä ↑</option>
-        <option value="date-desc">Päivämäärä ↓</option>
-        <option value="series">Sarja</option>
-      </select>
-      <div class="view-toggle">
-        <button class="view-btn active" id="view-cards" title="Korttinäkymä">▦</button>
-        <button class="view-btn" id="view-list" title="Listanäkymä">☰</button>
-        <button class="view-btn" id="view-map" title="Karttanäkymä"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><ellipse cx="8" cy="8" rx="3" ry="6.5"/><line x1="1.5" y1="8" x2="14.5" y2="8"/></svg></button>
+  <!-- ===== TULOSTIEDOT JA NÄKYMÄTOGGLE ===== -->
+  <section class="results-info container-fluid">
+    <div class="d-flex align-items-center justify-content-between py-2" style="max-width:1100px;margin:0 auto;">
+      <p id="results-count" class="mb-0 text-muted small"></p>
+      <div class="d-flex align-items-center gap-2">
+        <select id="filter-sort" class="form-select form-select-sm sort-select" title="Järjestys">
+          <option value="date-asc">Päivämäärä ↑</option>
+          <option value="date-desc">Päivämäärä ↓</option>
+          <option value="series">Sarja</option>
+        </select>
+        <div class="btn-group btn-group-sm" role="group">
+          <button class="btn btn-outline-secondary active" id="view-cards" title="Korttinäkymä"><i class="bi bi-grid-3x2-gap"></i></button>
+          <button class="btn btn-outline-secondary" id="view-list" title="Listanäkymä"><i class="bi bi-list"></i></button>
+          <button class="btn btn-outline-secondary" id="view-map" title="Karttanäkymä"><i class="bi bi-globe-europe-africa"></i></button>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- ===== MAP VIEW ===== -->
-  <div class="map-container hidden" id="map-container">
+  <!-- ===== KARTTANÄKYMÄ ===== -->
+  <div class="map-container d-none" id="map-container">
     <div id="events-map"></div>
   </div>
 
-  <!-- ===== EVENT CARDS ===== -->
+  <!-- ===== TAPAHTUMAKORTTIEN RUUDUKKO ===== -->
   <main class="events-grid" id="events-grid">
-    <!-- Cards injected by JS -->
+    <!-- Kortit lisätään jQueryllä -->
   </main>
 
-  <!-- ===== LOADING ===== -->
-  <div class="loading" id="loading">
-    <div class="loading-spinner"></div>
-    <p>Ladataan tapahtumia...</p>
+  <!-- ===== LATAUSANIMAATIO ===== -->
+  <div class="text-center py-5" id="loading">
+    <div class="spinner-border text-success mb-3" role="status">
+      <span class="visually-hidden">Ladataan...</span>
+    </div>
+    <p class="text-muted">Ladataan tapahtumia...</p>
   </div>
 
-  <!-- ===== EMPTY STATE ===== -->
-  <div class="empty-state hidden" id="empty-state">
-    <p class="empty-icon">🏔️</p>
-    <p>Ei tapahtumia valituilla suodattimilla.</p>
+  <!-- ===== TYHJÄ TILA ===== -->
+  <div class="empty-state text-center py-5 d-none" id="empty-state">
+    <p class="display-4">🏔️</p>
+    <p class="text-muted">Ei tapahtumia valituilla suodattimilla.</p>
     <p><a href="#" id="empty-reset-link">Tyhjennä suodattimet</a></p>
   </div>
 
-  <!-- ===== WEATHER MODAL ===== -->
-  <div class="modal-overlay hidden" id="weather-modal">
-    <div class="modal-content">
-      <button class="modal-close" id="modal-close">&times;</button>
-      <div id="weather-body">
-        <div class="loading-spinner"></div>
-        <p>Haetaan säätietoja...</p>
+  <!-- ===== SÄÄMODAALI (Bootstrap Modal) ===== -->
+  <div class="modal fade" id="weather-modal" tabindex="-1" aria-labelledby="weatherModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content bg-dark border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" id="weatherModalLabel">Sääennuste</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Sulje"></button>
+        </div>
+        <div class="modal-body" id="weather-body">
+          <div class="text-center py-3">
+            <div class="spinner-border text-success" role="status"></div>
+            <p class="text-muted mt-2">Haetaan säätietoja...</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ===== SUGGEST EVENT MODAL ===== -->
-  <div class="modal-overlay hidden" id="suggest-modal">
-    <div class="modal-content modal-form">
-      <button class="modal-close" id="suggest-modal-close">&times;</button>
-      <h3 class="form-title">Ehdota tapahtumaa</h3>
-      <p class="form-desc">Täytä tiedot niin lisäämme tapahtuman kalenteriin tarkistuksen jälkeen.</p>
-      <form name="event-suggestion" method="POST" data-netlify="true" netlify-honeypot="bot-field" id="suggest-form">
-        <input type="hidden" name="form-name" value="event-suggestion">
-        <p class="hidden"><label>Älä täytä: <input name="bot-field"></label></p>
-        <div class="form-row">
-          <label for="suggest-series">Sarja *</label>
-          <select id="suggest-series" name="series" required>
-            <option value="">Valitse...</option>
-            <option value="Suomi DH Cup">Suomi DH Cup</option>
-            <option value="Finnish Enduro Cup">Finnish Enduro Cup</option>
-            <option value="MTB Rally">MTB Rally</option>
-            <option value="Muu kisa">Muu kisa</option>
-            <option value="Tapahtuma">Tapahtuma</option>
-            <option value="Muu">Jokin muu (kerro lisätiedoissa)</option>
-          </select>
+  <!-- ===== EHDOTA TAPAHTUMAA -MODAALI (Bootstrap Modal) ===== -->
+  <div class="modal fade" id="suggest-modal" tabindex="-1" aria-labelledby="suggestModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content bg-dark border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" id="suggestModalLabel">Ehdota tapahtumaa</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Sulje"></button>
         </div>
-        <div class="form-row">
-          <label for="suggest-discipline">Laji *</label>
-          <select id="suggest-discipline" name="discipline" required>
-            <option value="">Valitse...</option>
-            <option value="Downhill">Downhill</option>
-            <option value="Enduro">Enduro</option>
-            <option value="Other">Muu</option>
-          </select>
-        </div>
-        <div class="form-row form-row-half">
-          <div>
-            <label for="suggest-date-start">Alkupäivä *</label>
-            <input type="date" id="suggest-date-start" name="date-start" required>
+        <div class="modal-body">
+          <p class="form-desc text-muted small">Täytä tiedot niin lisäämme tapahtuman kalenteriin tarkistuksen jälkeen.</p>
+          <form name="event-suggestion" method="POST" data-netlify="true" netlify-honeypot="bot-field" id="suggest-form">
+            <input type="hidden" name="form-name" value="event-suggestion">
+            <p class="d-none"><label>Älä täytä: <input name="bot-field"></label></p>
+            <div class="mb-3">
+              <label for="suggest-series" class="form-label small">Sarja *</label>
+              <select id="suggest-series" name="series" class="form-select" required>
+                <option value="">Valitse...</option>
+                <option value="Suomi DH Cup">Suomi DH Cup</option>
+                <option value="Finnish Enduro Cup">Finnish Enduro Cup</option>
+                <option value="MTB Rally">MTB Rally</option>
+                <option value="Muu kisa">Muu kisa</option>
+                <option value="Tapahtuma">Tapahtuma</option>
+                <option value="Muu">Jokin muu (kerro lisätiedoissa)</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="suggest-discipline" class="form-label small">Laji *</label>
+              <select id="suggest-discipline" name="discipline" class="form-select" required>
+                <option value="">Valitse...</option>
+                <option value="Downhill">Downhill</option>
+                <option value="Enduro">Enduro</option>
+                <option value="Other">Muu</option>
+              </select>
+            </div>
+            <div class="row mb-3">
+              <div class="col-6">
+                <label for="suggest-date-start" class="form-label small">Alkupäivä *</label>
+                <input type="date" id="suggest-date-start" name="date-start" class="form-control" required>
+              </div>
+              <div class="col-6">
+                <label for="suggest-date-end" class="form-label small">Loppupäivä *</label>
+                <input type="date" id="suggest-date-end" name="date-end" class="form-control" required>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label for="suggest-name" class="form-label small">Tapahtuman nimi *</label>
+              <input type="text" id="suggest-name" name="name" class="form-control" required placeholder="esim. Gravity Cup #3">
+            </div>
+            <div class="row mb-3">
+              <div class="col-6">
+                <label for="suggest-location" class="form-label small">Sijainti *</label>
+                <input type="text" id="suggest-location" name="location" class="form-control" required placeholder="esim. Tornari Bikepark">
+              </div>
+              <div class="col-6">
+                <label for="suggest-city" class="form-label small">Kaupunki *</label>
+                <input type="text" id="suggest-city" name="city" class="form-control" required placeholder="esim. Klaukkala">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label for="suggest-organizer" class="form-label small">Järjestäjä *</label>
+              <input type="text" id="suggest-organizer" name="organizer" class="form-control" required placeholder="esim. Club Tornari">
+            </div>
+            <div class="mb-3">
+              <label for="suggest-registration" class="form-label small">Ilmoittautuminen</label>
+              <input type="text" id="suggest-registration" name="registration-url" class="form-control" placeholder="esim. www.tapahtumiin.fi/ilmoittaudu">
+            </div>
+            <div class="mb-3">
+              <label for="suggest-url" class="form-label small">Lisätiedot (URL)</label>
+              <input type="text" id="suggest-url" name="url" class="form-control" placeholder="esim. www.bikepark.fi/tapahtuma">
+            </div>
+            <div class="mb-3">
+              <label for="suggest-notes" class="form-label small">Muut huomiot</label>
+              <textarea id="suggest-notes" name="notes" rows="2" class="form-control" placeholder="Valinnainen"></textarea>
+            </div>
+            <button type="submit" class="btn btn-success w-100">Lähetä ehdotus</button>
+          </form>
+          <div class="text-center py-4 d-none" id="suggest-success">
+            <p class="display-5">✅</p>
+            <p>Kiitos ehdotuksesta! Tarkistamme sen ja lisäämme kalenteriin.</p>
           </div>
-          <div>
-            <label for="suggest-date-end">Loppupäivä *</label>
-            <input type="date" id="suggest-date-end" name="date-end" required>
-          </div>
         </div>
-        <div class="form-row">
-          <label for="suggest-name">Tapahtuman nimi *</label>
-          <input type="text" id="suggest-name" name="name" required placeholder="esim. Gravity Cup #3">
-        </div>
-        <div class="form-row form-row-half">
-          <div>
-            <label for="suggest-location">Sijainti *</label>
-            <input type="text" id="suggest-location" name="location" required placeholder="esim. Tornari Bikepark">
-          </div>
-          <div>
-            <label for="suggest-city">Kaupunki *</label>
-            <input type="text" id="suggest-city" name="city" required placeholder="esim. Klaukkala">
-          </div>
-        </div>
-        <div class="form-row">
-          <label for="suggest-organizer">Järjestäjä *</label>
-          <input type="text" id="suggest-organizer" name="organizer" required placeholder="esim. Club Tornari">
-        </div>
-        <div class="form-row">
-          <label for="suggest-registration">Ilmoittautuminen</label>
-          <input type="text" id="suggest-registration" name="registration-url" placeholder="esim. www.tapahtumiin.fi/ilmoittaudu">
-        </div>
-        <div class="form-row">
-          <label for="suggest-url">Lisätiedot (URL)</label>
-          <input type="text" id="suggest-url" name="url" placeholder="esim. www.bikepark.fi/tapahtuma">
-        </div>
-        <div class="form-row">
-          <label for="suggest-notes">Muut huomiot</label>
-          <textarea id="suggest-notes" name="notes" rows="2" placeholder="Valinnainen"></textarea>
-        </div>
-        <button type="submit" class="btn-submit">Lähetä ehdotus</button>
-      </form>
-      <div class="form-success hidden" id="suggest-success">
-        <p class="success-icon">✅</p>
-        <p>Kiitos ehdotuksesta! Tarkistamme sen ja lisäämme kalenteriin.</p>
       </div>
     </div>
   </div>
 
-  <!-- ===== FEEDBACK MODAL ===== -->
-  <div class="modal-overlay hidden" id="feedback-modal">
-    <div class="modal-content modal-form">
-      <button class="modal-close" id="feedback-modal-close">&times;</button>
-      <h3 class="form-title">Palaute</h3>
-      <p class="form-desc">Bugi, idea tai muu palaute — kaikki on tervetullutta.</p>
-      <form name="feedback" method="POST" data-netlify="true" netlify-honeypot="bot-field" id="feedback-form">
-        <input type="hidden" name="form-name" value="feedback">
-        <p class="hidden"><label>Älä täytä: <input name="bot-field"></label></p>
-        <div class="form-row">
-          <label for="feedback-type">Tyyppi *</label>
-          <select id="feedback-type" name="type" required>
-            <option value="">Valitse...</option>
-            <option value="bug">Bugi / virhe</option>
-            <option value="idea">Idea / toive</option>
-            <option value="muu">Muu</option>
-          </select>
+  <!-- ===== PALAUTEMODAALI (Bootstrap Modal) ===== -->
+  <div class="modal fade" id="feedback-modal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" id="feedbackModalLabel">Palaute</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Sulje"></button>
         </div>
-        <div class="form-row">
-          <label for="feedback-message">Viesti *</label>
-          <textarea id="feedback-message" name="message" rows="4" required placeholder="Kerro tarkemmin..."></textarea>
+        <div class="modal-body">
+          <p class="text-muted small">Bugi, idea tai muu palaute — kaikki on tervetullutta.</p>
+          <form name="feedback" method="POST" data-netlify="true" netlify-honeypot="bot-field" id="feedback-form">
+            <input type="hidden" name="form-name" value="feedback">
+            <p class="d-none"><label>Älä täytä: <input name="bot-field"></label></p>
+            <div class="mb-3">
+              <label for="feedback-type" class="form-label small">Tyyppi *</label>
+              <select id="feedback-type" name="type" class="form-select" required>
+                <option value="">Valitse...</option>
+                <option value="bug">Bugi / virhe</option>
+                <option value="idea">Idea / toive</option>
+                <option value="muu">Muu</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="feedback-message" class="form-label small">Viesti *</label>
+              <textarea id="feedback-message" name="message" rows="4" class="form-control" required placeholder="Kerro tarkemmin..."></textarea>
+            </div>
+            <div class="mb-3">
+              <label for="feedback-contact" class="form-label small">Yhteystieto (valinnainen)</label>
+              <input type="text" id="feedback-contact" name="contact" class="form-control" placeholder="esim. sähköposti tai puhelinnumero">
+            </div>
+            <button type="submit" class="btn btn-success w-100">Lähetä palaute</button>
+          </form>
+          <div class="text-center py-4 d-none" id="feedback-success">
+            <p class="display-5">✅</p>
+            <p>Kiitos palautteesta!</p>
+          </div>
         </div>
-        <div class="form-row">
-          <label for="feedback-contact">Yhteystieto (valinnainen)</label>
-          <input type="text" id="feedback-contact" name="contact" placeholder="esim. sähköposti tai puhelinnumero">
-        </div>
-        <button type="submit" class="btn-submit">Lähetä palaute</button>
-      </form>
-      <div class="form-success hidden" id="feedback-success">
-        <p class="success-icon">✅</p>
-        <p>Kiitos palautteesta!</p>
       </div>
     </div>
   </div>
 
-  <!-- ===== FOOTER ===== -->
-  <footer class="site-footer">
-    <div class="footer-actions">
-      <button class="footer-btn" id="btn-suggest-event">＋ Ehdota tapahtumaa</button>
-      <button class="footer-btn footer-btn-secondary" id="btn-feedback">💬 Palaute</button>
+  <!-- ===== TAKAISIN YLÖS -NAPPI ===== -->
+  <button class="btn-back-to-top d-none" id="btn-back-to-top" title="Takaisin ylös">
+    <i class="bi bi-chevron-up"></i>
+  </button>
+
+  <!-- ===== BOOTSTRAP TOAST -ILMOITUKSET ===== -->
+  <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-container">
+    <div class="toast align-items-center border-0" id="app-toast" role="alert" aria-live="polite" aria-atomic="true" data-bs-delay="3000">
+      <div class="d-flex">
+        <div class="toast-body" id="toast-body"></div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Sulje"></button>
+      </div>
     </div>
-    <p>Gravity Calendar 2026 — Tekijä: Karla · <a href="https://www.linkedin.com/in/tengska/" target="_blank" rel="noopener">LinkedIn</a> · <a href="https://www.instagram.com/tengska/" target="_blank" rel="noopener">Instagram</a></p>
-    <p class="footer-small">Säädata: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> · Kartta: <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap</a></p>
-    <p class="footer-small">Tapahtumatiedot päivitetty 4.5.2026. Tarkista ajantasaiset tiedot järjestäjien sivuilta.</p>
+  </div>
+
+  <!-- ===== ALATUNNISTE ===== -->
+  <footer class="site-footer text-center py-4 border-top border-secondary">
+    <div class="d-flex gap-2 justify-content-center mb-3">
+      <button class="btn btn-outline-success btn-sm" id="btn-suggest-event"><i class="bi bi-plus-lg"></i> Ehdota tapahtumaa</button>
+      <button class="btn btn-outline-secondary btn-sm" id="btn-feedback"><i class="bi bi-chat-dots"></i> Palaute</button>
+    </div>
+    <p class="text-muted small mb-1">Gravity Calendar 2026 — Tekijä: Karla · <a href="https://www.linkedin.com/in/tengska/" target="_blank" rel="noopener">LinkedIn</a> · <a href="https://www.instagram.com/tengska/" target="_blank" rel="noopener">Instagram</a></p>
+    <p class="text-muted" style="font-size:0.7rem">Säädata: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> · Kartta: <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap</a></p>
+    <p class="text-muted" style="font-size:0.7rem">Tapahtumatiedot päivitetty 4.5.2026. Tarkista ajantasaiset tiedot järjestäjien sivuilta.</p>
   </footer>
 
+  <!-- jQuery (ulkoinen kirjasto — korvaa perinteisen JavaScriptin) -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <!-- Bootstrap 5 JS (UI-kirjasto) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Leaflet-kartta -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <!-- AOS (Animate On Scroll) -kirjasto -->
+  <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
+  <!-- Oma sovellus (jQuery-pohjainen) -->
   <script src="app.js"></script>
 </body>
 </html>

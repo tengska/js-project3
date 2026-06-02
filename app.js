@@ -3,49 +3,48 @@
  * GRAVITY CALENDAR — app.js
  * Suomen Gravity MTB Tapahtumat 2026
  *
- * Fetches event data from events.json and
- * weather forecasts from Open-Meteo API.
- * Native JS only — no external libraries.
+ * Projekti 3: JS-sovellus ulkoisia kirjastoja käyttäen
+ * - jQuery: DOM-käsittely, tapahtumakuuntelijat, AJAX
+ * - Bootstrap 5: UI-komponentit (modaalit, kortit, napit)
+ * - Leaflet: Karttanäkymä
+ * - Open-Meteo API: Sääennusteet
+ *
+ * Tekijä: Karla
  * ============================================
  */
 
-// ---- State ----
-let allEvents = [];        // All events loaded from JSON
-let filteredEvents = [];   // Events after applying filters
-let weatherCache = {};     // Cache weather responses to avoid duplicate API calls
-let currentView = 'cards'; // Current view mode: 'cards', 'list', or 'map'
-let currentSegment = 'all'; // Content segment: 'races', 'events', or 'all'
-let weatherQueue = [];     // Queue for staggered weather mini loading
-let leafletMap = null;     // Leaflet map instance
-let mapMarkers = [];       // Map marker layer group
+// ============================================
+// 1. SOVELLUKSEN TILA (muuttujat)
+// ============================================
 
-// ---- DOM References ----
-const eventsGrid = document.getElementById('events-grid');
-const loadingEl = document.getElementById('loading');
-const emptyStateEl = document.getElementById('empty-state');
-const resultsCountEl = document.getElementById('results-count');
-const weatherModal = document.getElementById('weather-modal');
-const weatherBody = document.getElementById('weather-body');
-const modalCloseBtn = document.getElementById('modal-close');
+// Kaikki tapahtumat JSON-tiedostosta
+var allEvents = [];
+// Suodatetut tapahtumat näytettäväksi
+var filteredEvents = [];
+// Välimuisti sään API-vastauksille (vältetään turhat kutsut)
+var weatherCache = {};
+// Nykyinen näkymätila: 'cards', 'list' tai 'map'
+var currentView = 'cards';
+// Sisältösegmentti: 'races', 'events' tai 'all'
+var currentSegment = 'all';
+// Jono sään pikakuvauksille korteissa
+var weatherQueue = [];
+// Leaflet-karttaobjekti
+var leafletMap = null;
+// Karttamerkkien ryhmä
+var mapMarkers = [];
+// Estää suodatinpaneelin sulkeutumisen heti avauksen jälkeen mobiilissa
+var filterExpandedByUser = false;
+var filterGuardTimer = null;
 
-// Filter elements
-const filterSort = document.getElementById('filter-sort');
-const filterSearch = document.getElementById('filter-search');
-const btnResetFilters = document.getElementById('btn-reset-filters');
-const viewCardsBtn = document.getElementById('view-cards');
-const viewListBtn = document.getElementById('view-list');
-const emptyResetLink = document.getElementById('empty-reset-link');
-const filtersSection = document.getElementById('filters-section');
-const filterToggleBtn = document.getElementById('filter-toggle');
-const filterToggleIcon = document.getElementById('filter-toggle-icon');
-const mapContainer = document.getElementById('map-container');
-const viewMapBtn = document.getElementById('view-map');
-const btnSuggestEvent = document.getElementById('btn-suggest-event');
-const btnFeedback = document.getElementById('btn-feedback');
-const suggestModal = document.getElementById('suggest-modal');
-const feedbackModal = document.getElementById('feedback-modal');
+// Bootstrap-modaali-instanssit (alustetaan kun DOM valmis)
+var weatherBsModal = null;
+var suggestBsModal = null;
+var feedbackBsModal = null;
+// Bootstrap Toast -instanssi ilmoituksille
+var appToast = null;
 
-// Multi-select default labels
+// Monivalintakenttien oletustekstit
 var multiSelectDefaults = {
   'filter-series':     'Kaikki sarjat',
   'filter-discipline': 'Kaikki lajit',
@@ -54,51 +53,69 @@ var multiSelectDefaults = {
 };
 
 
+/**
+ * Näyttää Bootstrap Toast -ilmoituksen sivun alareunassa.
+ * Käyttää Bootstrapin Toast-komponenttia.
+ */
+function showToast(message) {
+  $('#toast-body').text(message);
+  if (appToast) appToast.show();
+}
+
+
 // ============================================
-// 1. FETCH EVENTS DATA (AJAX)
+// 2. TAPAHTUMADATAN LATAUS (jQuery AJAX)
 // ============================================
 
 /**
- * Loads event data from events.json using fetch API (AJAX).
- * This is the primary data source for the application.
+ * Lataa tapahtumatiedot events.json-tiedostosta
+ * käyttäen jQueryn $.getJSON-metodia (AJAX-kutsu).
  */
 function loadEvents() {
-  fetch('events.json')
-    .then(function(response) {
-      if (!response.ok) {
-        throw new Error('Verkkovirhe: ' + response.status);
-      }
-      return response.json();
-    })
-    .then(function(data) {
-      allEvents = data.map(updateEventStatus);
+  $.getJSON('events.json')
+    .done(function(data) {
+      // Päivitetään jokaisen tapahtuman tila (tuleva/mennyt)
+      allEvents = $.map(data, function(event) {
+        return updateEventStatus(event);
+      });
+
+      // Järjestetään alkupäivämäärän mukaan
       allEvents.sort(function(a, b) {
         return new Date(a.dateStart) - new Date(b.dateStart);
       });
-      loadingEl.classList.add('hidden');
+
+      // Piilotetaan latausanimaatio jQueryllä
+      $('#loading').addClass('d-none');
+
+      // Suodatetaan ja renderöidään tapahtumat
       applyFilters();
     })
-    .catch(function(error) {
-      console.error('Tapahtumien lataus epäonnistui:', error);
-      loadingEl.innerHTML = '<p>⚠️ Tapahtumien lataus epäonnistui. Yritä päivittää sivu.</p>';
+    .fail(function(jqXHR, textStatus, errorThrown) {
+      // Näytetään virheviesti jos lataus epäonnistuu
+      console.error('Tapahtumien lataus epäonnistui:', textStatus, errorThrown);
+      $('#loading').html('<p class="text-danger">⚠️ Tapahtumien lataus epäonnistui. Yritä päivittää sivu.</p>');
     });
 }
 
 
 // ============================================
-// 2. WEATHER API (AJAX — Open-Meteo)
+// 3. SÄÄ-API (jQuery AJAX — Open-Meteo)
 // ============================================
 
 /**
- * Fetches weather forecast for a specific location from Open-Meteo API.
- * Open-Meteo is free and requires no API key.
+ * Hakee sääennusteen tietylle sijainnille Open-Meteo API:sta.
+ * Open-Meteo on ilmainen eikä vaadi API-avainta.
+ * Käyttää jQueryn $.ajax-metodia AJAX-kutsuun.
  */
 function fetchWeather(lat, lon, dateStart, dateEnd) {
+  // Tarkistetaan löytyykö data välimuistista
   var cacheKey = lat + ',' + lon + ',' + dateStart;
   if (weatherCache[cacheKey]) {
-    return Promise.resolve(weatherCache[cacheKey]);
+    // Palautetaan välimuistista jQuery Deferred -objektina
+    return $.Deferred().resolve(weatherCache[cacheKey]).promise();
   }
 
+  // Rakennetaan API-osoite parametreilla
   var url = 'https://api.open-meteo.com/v1/forecast'
     + '?latitude=' + lat
     + '&longitude=' + lon
@@ -107,31 +124,32 @@ function fetchWeather(lat, lon, dateStart, dateEnd) {
     + '&start_date=' + dateStart
     + '&end_date=' + dateEnd;
 
-  return fetch(url)
-    .then(function(response) {
-      if (!response.ok) throw new Error('Sää-API virhe: ' + response.status);
-      return response.json();
-    })
-    .then(function(data) {
-      weatherCache[cacheKey] = data;
-      return data;
-    });
+  // jQuery AJAX -kutsu sää-API:lle
+  return $.ajax({
+    url: url,
+    dataType: 'json'
+  }).done(function(data) {
+    // Tallennetaan vastaus välimuistiin
+    weatherCache[cacheKey] = data;
+  });
 }
 
 /**
- * Fetches historical weather for the same calendar dates from the previous year.
- * Used for events beyond the 16-day forecast range.
+ * Hakee viime vuoden historiallisen sään samoille kalenteripäiville.
+ * Käytetään tapahtumille jotka ovat yli 16 päivän päässä.
  */
 function fetchHistoricalWeather(lat, lon, dateStart, dateEnd) {
+  // Lasketaan viime vuoden päivämäärät
   var startYear = new Date(dateStart).getFullYear();
   var lastYearStart = dateStart.replace(startYear, startYear - 1);
   var lastYearEnd = dateEnd.replace(new Date(dateEnd).getFullYear(), startYear - 1);
 
   var cacheKey = 'hist-' + lat + ',' + lon + ',' + lastYearStart;
   if (weatherCache[cacheKey]) {
-    return Promise.resolve(weatherCache[cacheKey]);
+    return $.Deferred().resolve(weatherCache[cacheKey]).promise();
   }
 
+  // Historiallisen sään API-osoite
   var url = 'https://archive-api.open-meteo.com/v1/archive'
     + '?latitude=' + lat
     + '&longitude=' + lon
@@ -140,19 +158,17 @@ function fetchHistoricalWeather(lat, lon, dateStart, dateEnd) {
     + '&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode,windspeed_10m_max'
     + '&timezone=Europe/Helsinki';
 
-  return fetch(url)
-    .then(function(response) {
-      if (!response.ok) throw new Error('Archive API virhe: ' + response.status);
-      return response.json();
-    })
-    .then(function(data) {
-      weatherCache[cacheKey] = data;
-      return data;
-    });
+  return $.ajax({
+    url: url,
+    dataType: 'json'
+  }).done(function(data) {
+    weatherCache[cacheKey] = data;
+  });
 }
 
 /**
- * Maps WMO weather code to a human-readable description and emoji.
+ * Muuntaa WMO-sääkoodin kuvaukseksi ja emojiksi.
+ * WMO = World Meteorological Organization.
  */
 function weatherCodeToInfo(code) {
   var weatherMap = {
@@ -188,75 +204,88 @@ function weatherCodeToInfo(code) {
 
 
 // ============================================
-// 3. MULTI-SELECT HELPERS
+// 4. MONIVALINTA-APUFUNKTIOT (jQuery)
 // ============================================
 
 /**
- * Returns an array of selected values from a multi-select component.
+ * Palauttaa taulukon valituista arvoista monivalintakomponentista.
+ * Käyttää jQueryn valitsimia ja .map()-metodia.
  */
 function getSelectedValues(containerId) {
-  var checked = document.querySelectorAll('#' + containerId + ' .multi-select-option.checked');
-  return Array.from(checked).map(function(el) { return el.dataset.value; });
+  return $('#' + containerId + ' .multi-select-option.checked')
+    .map(function() {
+      return $(this).data('value');
+    })
+    .get(); // .get() muuntaa jQuery-objektin tavalliseksi taulukoksi
 }
 
 /**
- * Updates the trigger button text to reflect current selections.
- * Shows names for 1-2 selections, count for 3+, default label for none.
+ * Päivittää monivalinnan nappulatekstin valintojen mukaan.
+ * Näyttää nimet 1-2 valinnalle, lukumäärän 3+:lle.
  */
 function updateTriggerText(containerId) {
   var defaultText = multiSelectDefaults[containerId];
-  var container = document.getElementById(containerId);
-  var trigger = container.querySelector('.multi-select-trigger');
-  var selected = container.querySelectorAll('.multi-select-option.checked');
+  var $container = $('#' + containerId);
+  var $trigger = $container.find('.multi-select-trigger');
+  var $selected = $container.find('.multi-select-option.checked');
 
-  if (selected.length === 0) {
-    trigger.textContent = defaultText;
-    trigger.classList.remove('has-selection');
-  } else if (selected.length <= 2) {
-    var names = Array.from(selected).map(function(el) {
-      return el.dataset.short || el.dataset.value;
-    });
-    trigger.textContent = names.join(', ');
-    trigger.classList.add('has-selection');
+  if ($selected.length === 0) {
+    // Ei valintoja — näytetään oletusteksti
+    $trigger.text(defaultText).removeClass('has-selection');
+  } else if ($selected.length <= 2) {
+    // 1-2 valintaa — näytetään lyhytnimet
+    var names = $selected.map(function() {
+      return $(this).data('short') || $(this).data('value');
+    }).get();
+    $trigger.text(names.join(', ')).addClass('has-selection');
   } else {
-    trigger.textContent = selected.length + ' valittu';
-    trigger.classList.add('has-selection');
+    // 3+ valintaa — näytetään lukumäärä
+    $trigger.text($selected.length + ' valittu').addClass('has-selection');
   }
 }
 
 
 // ============================================
-// 4. FILTERING LOGIC
+// 5. SUODATUSLOGIIKKA
 // ============================================
 
 /**
- * Applies all active filters to the events array and re-renders.
+ * Suodattaa tapahtumat kaikkien aktiivisten suodattimien
+ * perusteella ja renderöi tulokset uudelleen.
  */
 function applyFilters() {
-  // Guard: if filters panel is open on mobile, suppress the scroll
-  // auto-collapse while re-render causes layout shifts
-  if (window.innerWidth <= 600 && filtersSection.classList.contains('expanded')) {
+  // Mobiilissa: estetään filtteripaneelin automaattinen sulkeutuminen
+  if ($(window).width() <= 600 && $('#filters-section').hasClass('expanded')) {
     filterExpandedByUser = true;
     clearTimeout(filterGuardTimer);
     filterGuardTimer = setTimeout(function() { filterExpandedByUser = false; }, 500);
   }
+
+  // Haetaan kaikkien suodattimien arvot jQueryllä
   var series     = getSelectedValues('filter-series');
   var discipline = getSelectedValues('filter-discipline');
   var month      = getSelectedValues('filter-month');
   var status     = getSelectedValues('filter-status');
-  var sortBy     = filterSort.value;
-  var search     = filterSearch.value.toLowerCase().trim();
+  var sortBy     = $('#filter-sort').val();
+  var search     = $('#filter-search').val().toLowerCase().trim();
 
-  filteredEvents = allEvents.filter(function(event) {
+  // Suodatetaan tapahtumat ehdoilla
+  filteredEvents = $.grep(allEvents, function(event) {
+    // Segmentti: kisat vs tapahtumat vs kaikki
     if (currentSegment === 'races' && event.competition === false) return false;
     if (currentSegment === 'events' && event.competition !== false) return false;
-    if (series.length > 0 && series.indexOf(event.series) === -1) return false;
-    if (discipline.length > 0 && discipline.indexOf(event.discipline) === -1) return false;
+    // Sarjasuodatin
+    if (series.length > 0 && $.inArray(event.series, series) === -1) return false;
+    // Lajisuodatin
+    if (discipline.length > 0 && $.inArray(event.discipline, discipline) === -1) return false;
+    // Kuukausisuodatin
     if (month.length > 0) {
       var eventMonth = String(new Date(event.dateStart).getMonth() + 1);
-      if (month.indexOf(eventMonth) === -1) return false;
+      if ($.inArray(eventMonth, month) === -1) return false;
     }
-    if (status.length > 0 && status.indexOf(event.status) === -1) return false;
+    // Tilasuodatin
+    if (status.length > 0 && $.inArray(event.status, status) === -1) return false;
+    // Tekstihaku
     if (search) {
       var searchTarget = (
         event.name + ' ' + event.location + ' ' +
@@ -267,7 +296,7 @@ function applyFilters() {
     return true;
   });
 
-  // Sort
+  // Järjestetään valitun vaihtoehdon mukaan
   if (sortBy === 'date-desc') {
     filteredEvents.sort(function(a, b) { return new Date(b.dateStart) - new Date(a.dateStart); });
   } else if (sortBy === 'series') {
@@ -278,7 +307,7 @@ function applyFilters() {
     filteredEvents.sort(function(a, b) { return new Date(a.dateStart) - new Date(b.dateStart); });
   }
 
-  // Show/hide reset button
+  // Lasketaan aktiivisten suodattimien määrä
   var activeCount = 0;
   if (currentSegment !== 'all') activeCount++;
   if (series.length > 0)     activeCount++;
@@ -288,37 +317,30 @@ function applyFilters() {
   if (sortBy !== 'date-asc') activeCount++;
   if (search !== '')         activeCount++;
 
+  // Näytetään/piilotetaan tyhjennä-nappi jQueryllä
   if (activeCount > 0) {
-    btnResetFilters.textContent = 'Tyhjennä (' + activeCount + ')';
-    btnResetFilters.classList.remove('hidden');
+    $('#btn-reset-filters').text('Tyhjennä (' + activeCount + ')').removeClass('d-none');
   } else {
-    btnResetFilters.classList.add('hidden');
+    $('#btn-reset-filters').addClass('d-none');
   }
 
-  // Update mobile filter toggle text with segment name
+  // Päivitetään mobiili-toggle -teksti
   var segmentLabels = { races: 'Kisat', events: 'Tapahtumat', all: 'Kaikki' };
-  var toggleLabel = filterToggleBtn.querySelector('span');
-  var filterBadge = document.getElementById('filter-badge');
   var segmentSuffix = currentSegment !== 'all' ? ' · ' + segmentLabels[currentSegment] : '';
-  var badgeText = activeCount > 0 ? ' (' + activeCount + ')' : '';
-  toggleLabel.innerHTML = 'Suodattimet' + (activeCount > 0 ? ' <span class="filter-badge" id="filter-badge">' + badgeText + '</span>' : '') + segmentSuffix;
-  if (activeCount === 0) {
-    filterBadge = document.getElementById('filter-badge');
-    if (filterBadge) filterBadge.classList.add('hidden');
-  }
+  var badgeHtml = activeCount > 0 ? ' <span class="filter-badge">(' + activeCount + ')</span>' : '';
+  $('#filter-toggle span:first').html('Suodattimet' + badgeHtml + segmentSuffix);
 
+  // Renderöidään suodatetut tapahtumat
   renderEvents(filteredEvents);
 }
 
 /**
- * Updates event status (upcoming/past) based on current date.
- * Does not override manually set 'cancelled' status.
+ * Päivittää tapahtuman tilan (tuleva/mennyt) nykyisen päivämäärän mukaan.
+ * Ei ylikirjoita manuaalisesti asetettua 'cancelled'-tilaa.
  */
 function updateEventStatus(event) {
-  var updated = {};
-  for (var key in event) {
-    if (event.hasOwnProperty(key)) updated[key] = event[key];
-  }
+  // Kopioidaan tapahtumaobjekti jQueryn $.extend-metodilla
+  var updated = $.extend({}, event);
   if (updated.status === 'cancelled') return updated;
 
   var today = new Date();
@@ -326,90 +348,111 @@ function updateEventStatus(event) {
   var endDate = new Date(updated.dateEnd);
   endDate.setHours(23, 59, 59, 999);
 
+  // Asetetaan tila päivämäärän perusteella
   updated.status = endDate < today ? 'past' : 'upcoming';
   return updated;
 }
 
 
 // ============================================
-// 5. RENDERING
+// 6. RENDERÖINTI (jQuery DOM-käsittely)
 // ============================================
 
 /**
- * Renders event cards or rows into the grid.
+ * Renderöi tapahtumakortit tai -rivit ruudukkoon.
+ * Käyttää jQueryä DOM-elementtien luontiin ja lisäämiseen.
  */
 function renderEvents(events) {
-  eventsGrid.innerHTML = '';
+  // Tyhjennetään ruudukko jQueryllä
+  var $grid = $('#events-grid');
+  $grid.empty();
   weatherQueue = [];
 
+  // Karttanäkymä — erillinen renderöinti
   if (currentView === 'map') {
-    eventsGrid.classList.add('hidden');
-    mapContainer.classList.remove('hidden');
-    emptyStateEl.classList.add('hidden');
-    resultsCountEl.textContent = events.length + ' tapahtumaa';
+    $grid.addClass('d-none');
+    $('#map-container').removeClass('d-none');
+    $('#empty-state').addClass('d-none');
+    $('#results-count').text(events.length + ' tapahtumaa');
     renderMap(events);
     return;
   }
 
-  mapContainer.classList.add('hidden');
-  eventsGrid.classList.remove('hidden');
+  // Kortti- tai listanäkymä
+  $('#map-container').addClass('d-none');
+  $grid.removeClass('d-none');
 
+  // Vaihdetaan CSS-luokka listanäkymälle
   if (currentView === 'list') {
-    eventsGrid.classList.add('list-view');
+    $grid.addClass('list-view');
   } else {
-    eventsGrid.classList.remove('list-view');
+    $grid.removeClass('list-view');
   }
 
-  resultsCountEl.textContent = events.length + ' tapahtumaa';
+  // Päivitetään tulosmääräteksti
+  $('#results-count').text(events.length + ' tapahtumaa');
 
+  // Näytetään tyhjä tila jos ei tuloksia
   if (events.length === 0) {
-    emptyStateEl.classList.remove('hidden');
+    $('#empty-state').removeClass('d-none');
     return;
   }
-  emptyStateEl.classList.add('hidden');
+  $('#empty-state').addClass('d-none');
 
+  // Luodaan kortit/rivit jQueryn $.each-iteraatiolla
   var lastMonth = null;
-  events.forEach(function(event, index) {
+  $.each(events, function(index, event) {
+    // Kuukausierottaja — ryhmittelee tapahtumat kuukausittain
     var eventMonth = new Date(event.dateStart).getMonth();
     var eventYear = new Date(event.dateStart).getFullYear();
     var monthKey = eventYear + '-' + eventMonth;
     if (monthKey !== lastMonth) {
       lastMonth = monthKey;
-      var divider = document.createElement('div');
-      divider.className = 'month-divider';
-      divider.textContent = formatMonthYear(event.dateStart);
-      eventsGrid.appendChild(divider);
+      // Luodaan erottajaelementti jQueryllä — AOS fade-right animaatio
+      $('<div>')
+        .addClass('month-divider')
+        .attr('data-aos', 'fade-right')
+        .text(formatMonthYear(event.dateStart))
+        .appendTo($grid);
     }
 
-    var el = currentView === 'list' ? createEventRow(event) : createEventCard(event);
-    el.classList.add('card-entering');
-    el.style.animationDelay = (index * 60) + 'ms';
-    eventsGrid.appendChild(el);
+    // Luodaan tapahtuma-elementti näkymän mukaan
+    var $el = currentView === 'list' ? createEventRow(event) : createEventCard(event);
+    $el.appendTo($grid);
   });
 
+  // Päivitetään AOS jotta uudet elementit animoidaan
+  if (typeof AOS !== 'undefined') AOS.refresh();
+
+  // Alustetaan Bootstrap Tooltips uusille dynaamisille elementeille
+  $('#events-grid [title]').each(function() {
+    new bootstrap.Tooltip(this, { trigger: 'hover', placement: 'top' });
+  });
+
+  // Käynnistetään sään pikakuvausten lataus
   processWeatherQueue(0);
 }
 
 /**
- * Creates a single event card DOM element.
+ * Luo yksittäisen tapahtumakortin jQuery-elementtinä.
+ * Käyttää Bootstrap-tyylejä kortin ulkoasuun.
  */
 function createEventCard(event) {
-  var card = document.createElement('div');
-  card.className = 'event-card';
-  if (event.status === 'cancelled') card.classList.add('cancelled');
-  if (event.status === 'past') card.classList.add('past');
+  // Luodaan korttielementti jQueryn $() -syntaksilla
+  // AOS-attribuutit lisäävät scroll-animaation (Animate On Scroll -kirjasto)
+  var $card = $('<div>').addClass('event-card').attr('data-aos', 'fade-up');
+  if (event.status === 'cancelled') $card.addClass('cancelled');
+  if (event.status === 'past') $card.addClass('past');
 
-  var seriesClass = 'series-rally';
-  if (event.series === 'Suomi DH Cup') seriesClass = 'series-dh';
-  if (event.series === 'Finnish Enduro Cup') seriesClass = 'series-enduro';
-  if (event.series === 'Tapahtumat/Muut') seriesClass = 'series-events';
-  if (event.series === 'Muu') seriesClass = 'series-muu';
-
+  // Määritetään sarjan väriluokka
+  var seriesClass = getSeriesClass(event.series);
   var dateDisplay = formatDateRange(event.dateStart, event.dateEnd);
   var countdown = getCountdown(event.dateStart, event.status);
 
+  // Rakennetaan kortin HTML-sisältö
   var html = '';
-  html += '<span class="card-series ' + seriesClass + '">' + event.seriesShort + '</span>';
+  // Sarjatunnus (Bootstrap Badge -tyylinen)
+  html += '<span class="badge card-series ' + seriesClass + '">' + event.seriesShort + '</span>';
   html += '<h3 class="card-name">' + event.name + '</h3>';
   html += '<p class="card-location">'
     + event.location
@@ -419,184 +462,77 @@ function createEventCard(event) {
     html += '<p class="card-organizer">' + event.organizer + '</p>';
   }
 
+  // Päivämäärärivi
   var dateMuted = event.status !== 'upcoming';
-  html += '<p class="card-date' + (dateMuted ? ' date-muted' : '') + '"><span class="date-icon">📅</span> ' + dateDisplay + '</p>';
+  html += '<p class="card-date' + (dateMuted ? ' date-muted' : '') + '"><i class="bi bi-calendar3"></i> ' + dateDisplay + '</p>';
   if (countdown) {
     html += '<p class="card-countdown">' + countdown + '</p>';
   }
 
+  // Painikkeet — käytetään Bootstrapin btn-luokkia
   var hasWeather = event.status === 'upcoming' && isWithinForecastRange(event.dateStart);
   var hasClimate = event.status === 'upcoming' && !isWithinForecastRange(event.dateStart);
 
   html += '<div class="card-actions">';
   if (event.registrationUrl && event.status === 'upcoming') {
-    html += '<a href="' + event.registrationUrl + '" target="_blank" rel="noopener" class="btn-register">Ilmoittaudu</a>';
+    html += '<a href="' + event.registrationUrl + '" target="_blank" rel="noopener" class="btn btn-outline-success btn-sm">Ilmoittaudu</a>';
   }
   if (event.resultsUrl && event.status === 'past' && event.competition !== false) {
-    html += '<a href="' + event.resultsUrl + '" target="_blank" rel="noopener" class="btn-results">Tulokset</a>';
+    html += '<a href="' + event.resultsUrl + '" target="_blank" rel="noopener" class="btn btn-outline-warning btn-sm">Tulokset</a>';
   }
   if (event.websiteUrl) {
-    html += '<a href="' + event.websiteUrl + '" target="_blank" rel="noopener">Lisätiedot</a>';
+    html += '<a href="' + event.websiteUrl + '" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">Lisätiedot</a>';
   }
   if (event.status === 'cancelled') {
-    html += '<span class="btn-cancelled">Peruttu</span>';
+    html += '<span class="btn btn-outline-danger btn-sm disabled">Peruttu</span>';
   }
   if (event.status === 'upcoming') {
-    html += '<a href="https://www.google.com/maps?q=' + event.lat + ',' + event.lon + '" target="_blank" rel="noopener" class="btn-map" title="Näytä kartalla">📍</a>';
+    html += '<a href="https://www.google.com/maps?q=' + event.lat + ',' + event.lon + '" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm" title="Näytä kartalla"><i class="bi bi-geo-alt"></i></a>';
   }
   if (hasWeather) {
-    html += '<button class="btn-weather" data-event-id="' + event.id + '">🌤️ Sää</button>';
+    html += '<button class="btn btn-outline-secondary btn-sm btn-weather" data-event-id="' + event.id + '"><i class="bi bi-cloud-sun"></i> Sää</button>';
   } else if (hasClimate) {
-    html += '<button class="btn-climate" data-event-id="' + event.id + '" title="Viime vuoden sää samoille päiville">🌡️ Sää</button>';
+    html += '<button class="btn btn-outline-secondary btn-sm btn-climate" data-event-id="' + event.id + '" title="Viime vuoden sää samoille päiville"><i class="bi bi-thermometer-half"></i> Sää</button>';
   }
   html += '</div>';
 
-  html += '<div class="card-weather-mini hidden" id="weather-mini-' + event.id + '"></div>';
+  // Sään pikakuvaus-alue kortissa
+  html += '<div class="card-weather-mini d-none" id="weather-mini-' + event.id + '"></div>';
 
-  card.innerHTML = html;
+  // Asetetaan HTML jQueryn .html()-metodilla
+  $card.html(html);
 
-  var weatherBtn = card.querySelector('.btn-weather');
-  if (weatherBtn) weatherBtn.addEventListener('click', function() { showWeatherModal(event); });
-  var climateBtn = card.querySelector('.btn-climate');
-  if (climateBtn) climateBtn.addEventListener('click', function() { showClimateModal(event); });
+  // Lisätään tapahtumakuuntelijat jQueryn .on()-metodilla
+  $card.find('.btn-weather').on('click', function() { showWeatherModal(event); });
+  $card.find('.btn-climate').on('click', function() { showClimateModal(event); });
 
+  // Lisätään lähiajan tapahtumat sääjonoon
   if (event.status === 'upcoming' && isWithinDays(event.dateStart, 7)) {
     weatherQueue.push(event);
   }
 
-  return card;
-}
-
-
-// ============================================
-// 6. WEATHER UI
-// ============================================
-
-function showWeatherModal(event) {
-  weatherModal.classList.remove('hidden');
-  weatherBody.innerHTML = '<div class="loading-spinner"></div><p>Haetaan säätietoja...</p>';
-  fetchWeather(event.lat, event.lon, event.dateStart, event.dateEnd)
-    .then(function(data) { renderWeatherModal(data, event); })
-    .catch(function(error) {
-      console.error('Sään haku epäonnistui:', error);
-      weatherBody.innerHTML = '<p>⚠️ Säätietojen haku epäonnistui. Ennuste on saatavilla vain seuraavalle 16 päivälle.</p>';
-    });
-}
-
-function renderWeatherModal(data, event) {
-  var html = '';
-  html += '<div class="weather-modal-header">';
-  html += '<h3>🌤️ Sääennuste — ' + event.location + '</h3>';
-  html += '<p>' + event.name + '</p>';
-  html += '</div>';
-
-  if (data.daily && data.daily.time) {
-    data.daily.time.forEach(function(date, i) {
-      var weatherInfo = weatherCodeToInfo(data.daily.weathercode[i]);
-      var maxTemp = Math.round(data.daily.temperature_2m_max[i]);
-      var minTemp = Math.round(data.daily.temperature_2m_min[i]);
-      var precipProb = data.daily.precipitation_probability_max[i];
-      var wind = Math.round(data.daily.windspeed_10m_max[i]);
-
-      html += '<div class="weather-day">';
-      html += '<span class="weather-day-date">' + formatShortDate(date) + '</span>';
-      html += '<span class="weather-day-icon">' + weatherInfo.emoji + '</span>';
-      html += '<span class="weather-day-temps"><span class="high">' + maxTemp + '°</span> / <span class="low">' + minTemp + '°</span></span>';
-      html += '<span class="weather-day-info">' + weatherInfo.text + ' · 💧 ' + precipProb + '% · 💨 ' + wind + ' km/h</span>';
-      html += '</div>';
-    });
-  } else {
-    html += '<p>Ennuste ei ole vielä saatavilla tälle ajankohdalle.</p>';
-  }
-
-  html += '<p class="weather-notice">Ennuste: Open-Meteo. Luotettavuus heikkenee yli 7 päivän päähän.</p>';
-  weatherBody.innerHTML = html;
-}
-
-function loadWeatherMini(event) {
-  fetchWeather(event.lat, event.lon, event.dateStart, event.dateStart)
-    .then(function(data) {
-      if (data.daily && data.daily.time && data.daily.time.length > 0) {
-        var miniEl = document.getElementById('weather-mini-' + event.id);
-        if (!miniEl) return;
-        var weatherInfo = weatherCodeToInfo(data.daily.weathercode[0]);
-        var maxTemp = Math.round(data.daily.temperature_2m_max[0]);
-        var precip = data.daily.precipitation_probability_max[0];
-        miniEl.innerHTML =
-          '<span class="weather-day-icon">' + weatherInfo.emoji + '</span>'
-          + '<span class="weather-temp">' + maxTemp + '°C</span>'
-          + '<span class="weather-desc">' + weatherInfo.text + ' · 💧 ' + precip + '%</span>';
-        miniEl.classList.remove('hidden');
-      }
-    })
-    .catch(function() {});
-}
-
-function showClimateModal(event) {
-  weatherModal.classList.remove('hidden');
-  weatherBody.innerHTML = '<div class="loading-spinner"></div><p>Haetaan viime vuoden säätietoja...</p>';
-  var lastYear = new Date(event.dateStart).getFullYear() - 1;
-  fetchHistoricalWeather(event.lat, event.lon, event.dateStart, event.dateEnd)
-    .then(function(data) { renderClimateModal(data, event, lastYear); })
-    .catch(function(error) {
-      console.error('Historiallisen sään haku epäonnistui:', error);
-      weatherBody.innerHTML = '<p>⚠️ Historiallisten säätietojen haku epäonnistui.</p>';
-    });
-}
-
-function renderClimateModal(data, event, lastYear) {
-  var html = '';
-  var currentYear = lastYear + 1;
-  html += '<div class="weather-modal-header">';
-  html += '<h3>🌡️ Sää viime vuonna — ' + event.location + '</h3>';
-  html += '<p>' + event.name + '</p>';
-  html += '</div>';
-
-  if (data.daily && data.daily.time && data.daily.time.length > 0) {
-    data.daily.time.forEach(function(date, i) {
-      var displayDate = date.replace(lastYear.toString(), currentYear.toString());
-      var weatherInfo = weatherCodeToInfo(data.daily.weathercode[i]);
-      var maxTemp = Math.round(data.daily.temperature_2m_max[i]);
-      var minTemp = Math.round(data.daily.temperature_2m_min[i]);
-      var precip = Math.round(data.daily.precipitation_sum[i] * 10) / 10;
-      var wind = Math.round(data.daily.windspeed_10m_max[i]);
-
-      html += '<div class="weather-day">';
-      html += '<span class="weather-day-date">' + formatShortDate(displayDate) + '</span>';
-      html += '<span class="weather-day-icon">' + weatherInfo.emoji + '</span>';
-      html += '<span class="weather-day-temps"><span class="high">' + maxTemp + '°</span> / <span class="low">' + minTemp + '°</span></span>';
-      html += '<span class="weather-day-info">' + weatherInfo.text + ' · 💧 ' + precip + 'mm · 💨 ' + wind + ' km/h</span>';
-      html += '</div>';
-    });
-  } else {
-    html += '<p>Historiallisia tietoja ei saatavilla.</p>';
-  }
-
-  html += '<p class="weather-notice">Sää ' + lastYear + ' samoille päiville — ei ennuste. Historiallinen tieto antaa viitteen tyypillisestä säästä.</p>';
-  weatherBody.innerHTML = html;
+  return $card;
 }
 
 /**
- * Creates a compact list row for an event (list view mode).
+ * Luo tiiviin listarivirin tapahtumalle (listanäkymä).
  */
 function createEventRow(event) {
-  var row = document.createElement('div');
-  row.className = 'event-row';
-  if (event.status === 'cancelled') row.classList.add('cancelled');
-  if (event.status === 'past') row.classList.add('past');
+  // AOS fade-up animaatio listariveille
+  var $row = $('<div>').addClass('event-row').attr('data-aos', 'fade-up');
+  if (event.status === 'cancelled') $row.addClass('cancelled');
+  if (event.status === 'past') $row.addClass('past');
 
-  var seriesClass = 'series-rally';
-  if (event.series === 'Suomi DH Cup') seriesClass = 'series-dh';
-  if (event.series === 'Finnish Enduro Cup') seriesClass = 'series-enduro';
-  if (event.series === 'Tapahtumat/Muut') seriesClass = 'series-events';
-  if (event.series === 'Muu') seriesClass = 'series-muu';
-
+  var seriesClass = getSeriesClass(event.series);
   var dateDisplay = formatDateRange(event.dateStart, event.dateEnd);
   var html = '';
 
+  // Päivämääräsarake
   var rowDateMuted = event.status !== 'upcoming';
-  html += '<div class="row-date' + (rowDateMuted ? ' date-muted' : '') + '">📅 ' + dateDisplay + '</div>';
-  html += '<span class="row-series card-series ' + seriesClass + '">' + event.seriesShort + '</span>';
+  html += '<div class="row-date' + (rowDateMuted ? ' date-muted' : '') + '"><i class="bi bi-calendar3"></i> ' + dateDisplay + '</div>';
+  // Sarjatunnus
+  html += '<span class="row-series badge card-series ' + seriesClass + '">' + event.seriesShort + '</span>';
+  // Tapahtumatiedot
   html += '<div class="row-info">';
   html += '<span class="row-name">' + event.name + '</span>';
   html += '<span class="row-location">' + event.location;
@@ -604,6 +540,7 @@ function createEventRow(event) {
   html += '</span>';
   html += '</div>';
 
+  // Toimintopainikkeet
   var hasWeather = event.status === 'upcoming' && isWithinForecastRange(event.dateStart);
   var hasClimate = event.status === 'upcoming' && !isWithinForecastRange(event.dateStart);
 
@@ -626,29 +563,169 @@ function createEventRow(event) {
     } else {
       html += '<span class="row-action-empty"></span>';
     }
-    html += '<a href="https://www.google.com/maps?q=' + event.lat + ',' + event.lon + '" target="_blank" rel="noopener" class="btn-map" title="Näytä kartalla">📍</a>';
+    html += '<a href="https://www.google.com/maps?q=' + event.lat + ',' + event.lon + '" target="_blank" rel="noopener" class="btn-map" title="Näytä kartalla"><i class="bi bi-geo-alt"></i></a>';
     if (hasWeather) {
-      html += '<button class="btn-weather" title="Näytä sääennuste">🌤️</button>';
+      html += '<button class="btn-weather" title="Näytä sääennuste"><i class="bi bi-cloud-sun"></i></button>';
     } else if (hasClimate) {
-      html += '<button class="btn-climate" title="Viime vuoden sää samoille päiville">🌡️</button>';
+      html += '<button class="btn-climate" title="Viime vuoden sää"><i class="bi bi-thermometer-half"></i></button>';
     } else {
       html += '<span class="row-action-empty"></span>';
     }
     html += '</div>';
   }
 
-  row.innerHTML = html;
+  $row.html(html);
 
-  var weatherBtn = row.querySelector('.btn-weather');
-  if (weatherBtn) weatherBtn.addEventListener('click', function() { showWeatherModal(event); });
-  var climateBtn = row.querySelector('.btn-climate');
-  if (climateBtn) climateBtn.addEventListener('click', function() { showClimateModal(event); });
+  // jQuery-kuuntelijat napeille
+  $row.find('.btn-weather').on('click', function() { showWeatherModal(event); });
+  $row.find('.btn-climate').on('click', function() { showClimateModal(event); });
 
-  return row;
+  return $row;
+}
+
+
+// ============================================
+// 7. SÄÄ-KÄYTTÖLIITTYMÄ (Bootstrap-modaalit)
+// ============================================
+
+/**
+ * Näyttää sääennustemodaalin tapahtumalle.
+ * Avaa Bootstrap-modaalin ja hakee sään AJAX-kutsulla.
+ */
+function showWeatherModal(event) {
+  // Näytetään latausanimaatio modaalissa
+  $('#weather-body').html(
+    '<div class="text-center py-3">'
+    + '<div class="spinner-border text-success" role="status"></div>'
+    + '<p class="text-muted mt-2">Haetaan säätietoja...</p>'
+    + '</div>'
+  );
+  // Avataan Bootstrap-modaali
+  weatherBsModal.show();
+
+  // Haetaan säädata jQuery AJAX -kutsulla
+  fetchWeather(event.lat, event.lon, event.dateStart, event.dateEnd)
+    .done(function(data) { renderWeatherModal(data, event); })
+    .fail(function() {
+      $('#weather-body').html('<p class="text-danger">⚠️ Säätietojen haku epäonnistui. Ennuste on saatavilla vain seuraavalle 16 päivälle.</p>');
+    });
 }
 
 /**
- * Processes the weather mini queue with staggered delays.
+ * Renderöi sääennustedatan modaalin sisältöön.
+ */
+function renderWeatherModal(data, event) {
+  var html = '';
+  html += '<div class="weather-modal-header mb-3">';
+  html += '<h5><i class="bi bi-cloud-sun"></i> Sääennuste — ' + event.location + '</h5>';
+  html += '<p class="text-muted small">' + event.name + '</p>';
+  html += '</div>';
+
+  // Käydään jokainen ennustepäivä läpi
+  if (data.daily && data.daily.time) {
+    $.each(data.daily.time, function(i, date) {
+      var weatherInfo = weatherCodeToInfo(data.daily.weathercode[i]);
+      var maxTemp = Math.round(data.daily.temperature_2m_max[i]);
+      var minTemp = Math.round(data.daily.temperature_2m_min[i]);
+      var precipProb = data.daily.precipitation_probability_max[i];
+      var wind = Math.round(data.daily.windspeed_10m_max[i]);
+
+      html += '<div class="weather-day">';
+      html += '<span class="weather-day-date">' + formatShortDate(date) + '</span>';
+      html += '<span class="weather-day-icon">' + weatherInfo.emoji + '</span>';
+      html += '<span class="weather-day-temps"><span class="fw-bold">' + maxTemp + '°</span> / <span class="text-muted">' + minTemp + '°</span></span>';
+      html += '<span class="weather-day-info">' + weatherInfo.text + ' · 💧 ' + precipProb + '% · 💨 ' + wind + ' km/h</span>';
+      html += '</div>';
+    });
+  } else {
+    html += '<p class="text-muted">Ennuste ei ole vielä saatavilla tälle ajankohdalle.</p>';
+  }
+
+  html += '<p class="weather-notice text-muted fst-italic mt-3" style="font-size:0.7rem">Ennuste: Open-Meteo. Luotettavuus heikkenee yli 7 päivän päähän.</p>';
+  // Asetetaan HTML jQueryllä
+  $('#weather-body').html(html);
+}
+
+/**
+ * Näyttää viime vuoden historialliset säätiedot.
+ */
+function showClimateModal(event) {
+  $('#weather-body').html(
+    '<div class="text-center py-3">'
+    + '<div class="spinner-border text-success" role="status"></div>'
+    + '<p class="text-muted mt-2">Haetaan viime vuoden säätietoja...</p>'
+    + '</div>'
+  );
+  weatherBsModal.show();
+
+  var lastYear = new Date(event.dateStart).getFullYear() - 1;
+  fetchHistoricalWeather(event.lat, event.lon, event.dateStart, event.dateEnd)
+    .done(function(data) { renderClimateModal(data, event, lastYear); })
+    .fail(function() {
+      $('#weather-body').html('<p class="text-danger">⚠️ Historiallisten säätietojen haku epäonnistui.</p>');
+    });
+}
+
+/**
+ * Renderöi historialliset säätiedot modaaliin.
+ */
+function renderClimateModal(data, event, lastYear) {
+  var currentYear = lastYear + 1;
+  var html = '';
+  html += '<div class="weather-modal-header mb-3">';
+  html += '<h5><i class="bi bi-thermometer-half"></i> Sää viime vuonna — ' + event.location + '</h5>';
+  html += '<p class="text-muted small">' + event.name + '</p>';
+  html += '</div>';
+
+  if (data.daily && data.daily.time && data.daily.time.length > 0) {
+    $.each(data.daily.time, function(i, date) {
+      var displayDate = date.replace(lastYear.toString(), currentYear.toString());
+      var weatherInfo = weatherCodeToInfo(data.daily.weathercode[i]);
+      var maxTemp = Math.round(data.daily.temperature_2m_max[i]);
+      var minTemp = Math.round(data.daily.temperature_2m_min[i]);
+      var precip = Math.round(data.daily.precipitation_sum[i] * 10) / 10;
+      var wind = Math.round(data.daily.windspeed_10m_max[i]);
+
+      html += '<div class="weather-day">';
+      html += '<span class="weather-day-date">' + formatShortDate(displayDate) + '</span>';
+      html += '<span class="weather-day-icon">' + weatherInfo.emoji + '</span>';
+      html += '<span class="weather-day-temps"><span class="fw-bold">' + maxTemp + '°</span> / <span class="text-muted">' + minTemp + '°</span></span>';
+      html += '<span class="weather-day-info">' + weatherInfo.text + ' · 💧 ' + precip + 'mm · 💨 ' + wind + ' km/h</span>';
+      html += '</div>';
+    });
+  } else {
+    html += '<p class="text-muted">Historiallisia tietoja ei saatavilla.</p>';
+  }
+
+  html += '<p class="weather-notice text-muted fst-italic mt-3" style="font-size:0.7rem">Sää ' + lastYear + ' samoille päiville — ei ennuste. Historiallinen tieto antaa viitteen tyypillisestä säästä.</p>';
+  $('#weather-body').html(html);
+}
+
+/**
+ * Lataa sään pikakuvauksen yksittäiselle kortille.
+ */
+function loadWeatherMini(event) {
+  fetchWeather(event.lat, event.lon, event.dateStart, event.dateStart)
+    .done(function(data) {
+      if (data.daily && data.daily.time && data.daily.time.length > 0) {
+        var $miniEl = $('#weather-mini-' + event.id);
+        if ($miniEl.length === 0) return;
+        var weatherInfo = weatherCodeToInfo(data.daily.weathercode[0]);
+        var maxTemp = Math.round(data.daily.temperature_2m_max[0]);
+        var precip = data.daily.precipitation_probability_max[0];
+        // Asetetaan pikakuvauksen sisältö ja näytetään jQuery fadeIn -animaatiolla
+        $miniEl.html(
+          '<span class="weather-day-icon">' + weatherInfo.emoji + '</span>'
+          + '<span class="weather-temp">' + maxTemp + '°C</span>'
+          + '<span class="weather-desc">' + weatherInfo.text + ' · 💧 ' + precip + '%</span>'
+        ).hide().removeClass('d-none').fadeIn(400);
+
+      }
+    });
+}
+
+/**
+ * Käsittelee sääjonon portaittaisilla viiveillä.
  */
 function processWeatherQueue(index) {
   if (index >= weatherQueue.length) return;
@@ -658,9 +735,23 @@ function processWeatherQueue(index) {
 
 
 // ============================================
-// 7. HELPER FUNCTIONS
+// 8. APUFUNKTIOT
 // ============================================
 
+/**
+ * Palauttaa sarjan CSS-luokan nimen.
+ */
+function getSeriesClass(series) {
+  if (series === 'Suomi DH Cup') return 'series-dh';
+  if (series === 'Finnish Enduro Cup') return 'series-enduro';
+  if (series === 'Tapahtumat/Muut') return 'series-events';
+  if (series === 'Muu') return 'series-muu';
+  return 'series-rally';
+}
+
+/**
+ * Muotoilee päivämäärävälin suomalaiseen muotoon (pp.kk.–pp.kk.vvvv).
+ */
 function formatDateRange(start, end) {
   var s = new Date(start);
   var e = new Date(end);
@@ -674,12 +765,18 @@ function formatDateRange(start, end) {
   return sDay + '.' + sMonth + '.–' + eDay + '.' + eMonth + '.' + year;
 }
 
+/**
+ * Muotoilee lyhyen päivämäärän (viikonpäivä + pvm).
+ */
 function formatShortDate(dateStr) {
   var d = new Date(dateStr);
   var days = ['Su', 'Ma', 'Ti', 'Ke', 'To', 'Pe', 'La'];
   return days[d.getDay()] + ' ' + d.getDate() + '.' + (d.getMonth() + 1) + '.';
 }
 
+/**
+ * Laskee lähtölaskennan tapahtuman alkuun.
+ */
 function getCountdown(dateStart, status) {
   if (status === 'past' || status === 'cancelled') return null;
   var today = new Date();
@@ -693,6 +790,9 @@ function getCountdown(dateStart, status) {
   return diffDays + ' päivän päästä';
 }
 
+/**
+ * Tarkistaa onko päivämäärä sääennusteen (16 pv) sisällä.
+ */
 function isWithinForecastRange(dateStr) {
   var today = new Date();
   var target = new Date(dateStr);
@@ -700,6 +800,9 @@ function isWithinForecastRange(dateStr) {
   return diffDays >= 0 && diffDays <= 16;
 }
 
+/**
+ * Tarkistaa onko päivämäärä tietyn päivämäärän sisällä.
+ */
 function isWithinDays(dateStr, days) {
   var today = new Date();
   var target = new Date(dateStr);
@@ -707,6 +810,9 @@ function isWithinDays(dateStr, days) {
   return diffDays >= 0 && diffDays <= days;
 }
 
+/**
+ * Muotoilee kuukauden ja vuoden suomeksi.
+ */
 function formatMonthYear(dateStr) {
   var d = new Date(dateStr);
   var months = ['Tammikuu','Helmikuu','Maaliskuu','Huhtikuu','Toukokuu','Kesäkuu',
@@ -716,174 +822,59 @@ function formatMonthYear(dateStr) {
 
 
 // ============================================
-// 8. RESET FILTERS
+// 9. SUODATTIMIEN TYHJENNYS
 // ============================================
 
+/**
+ * Tyhjentää kaikki suodattimet ja palauttaa oletusnäkymän.
+ */
 function resetFilters() {
-  document.querySelectorAll('.multi-select-option.checked').forEach(function(el) {
-    el.classList.remove('checked');
-  });
-  Object.keys(multiSelectDefaults).forEach(function(id) {
+  // Poistetaan kaikki valinnat jQueryllä
+  $('.multi-select-option.checked').removeClass('checked');
+  // Palautetaan oletustekstit
+  $.each(multiSelectDefaults, function(id) {
     updateTriggerText(id);
   });
-  filterSort.value = 'date-asc';
-  filterSearch.value = '';
+  // Palautetaan järjestys ja haku
+  $('#filter-sort').val('date-asc');
+  $('#filter-search').val('');
+  // Palautetaan segmentti
   setSegment('all');
   applyFilters();
 }
 
+/**
+ * Vaihtaa sisältösegmentin (kisat/tapahtumat/kaikki).
+ */
 function setSegment(value) {
   currentSegment = value;
-  // Sync all segment buttons (mobile + desktop)
-  document.querySelectorAll('.segment-btn').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.segment === value);
+  // Synkronoidaan kaikki segmenttipainikkeet jQueryllä
+  $('.segment-btn').each(function() {
+    $(this).toggleClass('active', $(this).data('segment') === value);
   });
-  var section = document.getElementById('filters-section');
-  section.classList.remove('segment-events', 'segment-races');
+  // Päivitetään suodatinpaneelin luokat
+  var $section = $('#filters-section');
+  $section.removeClass('segment-events segment-races');
   if (value === 'events') {
-    section.classList.add('segment-events');
-    document.querySelectorAll('#filter-series .multi-select-option.checked').forEach(function(el) {
-      el.classList.remove('checked');
-    });
+    $section.addClass('segment-events');
+    // Tyhjennetään sarja- ja lajisuodattimet tapahtumille
+    $('#filter-series .multi-select-option.checked').removeClass('checked');
     updateTriggerText('filter-series');
-    document.querySelectorAll('#filter-discipline .multi-select-option.checked').forEach(function(el) {
-      el.classList.remove('checked');
-    });
+    $('#filter-discipline .multi-select-option.checked').removeClass('checked');
     updateTriggerText('filter-discipline');
   } else if (value === 'races') {
-    section.classList.add('segment-races');
+    $section.addClass('segment-races');
   }
 }
 
 
 // ============================================
-// 9. EVENT LISTENERS (dynamically added!)
+// 10. KARTTANÄKYMÄ (Leaflet)
 // ============================================
 
-// Segment control: switch between races/events/all
-document.querySelectorAll('.segment-btn').forEach(function(btn) {
-  btn.addEventListener('click', function() {
-    setSegment(btn.dataset.segment);
-    applyFilters();
-  });
-});
-
-// Multi-select: open/close on trigger click, option toggle on option click
-Object.keys(multiSelectDefaults).forEach(function(id) {
-  var container = document.getElementById(id);
-  var trigger = container.querySelector('.multi-select-trigger');
-
-  trigger.addEventListener('click', function(e) {
-    e.stopPropagation();
-    var isOpen = container.classList.contains('open');
-    document.querySelectorAll('.multi-select.open').forEach(function(ms) { ms.classList.remove('open'); });
-    if (!isOpen) container.classList.add('open');
-  });
-
-  container.querySelectorAll('.multi-select-option').forEach(function(option) {
-    option.addEventListener('click', function(e) {
-      e.stopPropagation(); // keep dropdown open after selecting
-      option.classList.toggle('checked');
-      updateTriggerText(id);
-      applyFilters();
-    });
-  });
-});
-
-// Close all dropdowns on outside click
-document.addEventListener('click', function() {
-  document.querySelectorAll('.multi-select.open').forEach(function(ms) { ms.classList.remove('open'); });
-});
-
-// Sort change
-filterSort.addEventListener('change', applyFilters);
-
-// Search with debounce
-var searchTimeout = null;
-filterSearch.addEventListener('input', function() {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(applyFilters, 300);
-});
-
-// Reset filters button
-btnResetFilters.addEventListener('click', resetFilters);
-
-// Empty state reset link
-emptyResetLink.addEventListener('click', function(e) {
-  e.preventDefault();
-  resetFilters();
-});
-
-// Logo = home (reset filters, default view, scroll to top)
-document.querySelector('.logo').addEventListener('click', function(e) {
-  e.preventDefault();
-  resetFilters();
-  if (currentView !== 'cards') {
-    currentView = 'cards';
-    viewCardsBtn.classList.add('active');
-    viewListBtn.classList.remove('active');
-    viewMapBtn.classList.remove('active');
-    renderEvents(filteredEvents);
-  }
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-});
-
-// View toggle
-viewCardsBtn.addEventListener('click', function() {
-  if (currentView === 'cards') return;
-  currentView = 'cards';
-  viewCardsBtn.classList.add('active');
-  viewListBtn.classList.remove('active');
-  viewMapBtn.classList.remove('active');
-  renderEvents(filteredEvents);
-});
-
-viewListBtn.addEventListener('click', function() {
-  if (currentView === 'list') return;
-  currentView = 'list';
-  viewListBtn.classList.add('active');
-  viewCardsBtn.classList.remove('active');
-  viewMapBtn.classList.remove('active');
-  renderEvents(filteredEvents);
-});
-
-// Mobile filter toggle
-// filterExpandedByUser prevents the scroll handler from immediately
-// collapsing filters after the user opens them (expanding shifts layout
-// which fires a scroll event). The flag is cleared after a short delay
-// so normal scroll-to-collapse resumes once the layout settles.
-var filterExpandedByUser = false;
-var filterGuardTimer = null;
-filterToggleBtn.addEventListener('click', function() {
-  var willExpand = !filtersSection.classList.contains('expanded');
-  filtersSection.classList.toggle('expanded');
-  filterToggleIcon.textContent = willExpand ? '▴' : '▾';
-  if (willExpand) {
-    filterExpandedByUser = true;
-    clearTimeout(filterGuardTimer);
-    filterGuardTimer = setTimeout(function() { filterExpandedByUser = false; }, 500);
-  } else {
-    filterExpandedByUser = false;
-    clearTimeout(filterGuardTimer);
-  }
-});
-
-// Modal close
-modalCloseBtn.addEventListener('click', function() { weatherModal.classList.add('hidden'); });
-weatherModal.addEventListener('click', function(e) {
-  if (e.target === weatherModal) weatherModal.classList.add('hidden');
-});
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape' && !weatherModal.classList.contains('hidden')) {
-    weatherModal.classList.add('hidden');
-  }
-});
-
-
-// ============================================
-// 10. MAP VIEW
-// ============================================
-
+/**
+ * Palauttaa sarjan värikoodin karttamerkeille.
+ */
 function getSeriesColor(series) {
   if (series === 'Suomi DH Cup') return '#7ec850';
   if (series === 'Finnish Enduro Cup') return '#c8693a';
@@ -891,15 +882,13 @@ function getSeriesColor(series) {
   return '#4d8fa8';
 }
 
+/**
+ * Rakentaa popup-sisällön yksittäiselle tapahtumalle kartalla.
+ */
 function buildEventPopupBlock(event) {
-  var seriesClass = 'series-rally';
-  if (event.series === 'Suomi DH Cup') seriesClass = 'series-dh';
-  if (event.series === 'Finnish Enduro Cup') seriesClass = 'series-enduro';
-  if (event.series === 'Tapahtumat/Muut') seriesClass = 'series-events';
-  if (event.series === 'Muu') seriesClass = 'series-muu';
-
+  var seriesClass = getSeriesClass(event.series);
   var html = '<div class="map-popup-event">'
-    + '<div class="map-popup-series card-series ' + seriesClass + '">' + event.seriesShort + '</div>'
+    + '<div class="map-popup-series badge card-series ' + seriesClass + '">' + event.seriesShort + '</div>'
     + '<div class="map-popup-name">' + event.name + '</div>'
     + '<div class="map-popup-date">' + formatDateRange(event.dateStart, event.dateEnd) + '</div>'
     + '<div class="map-popup-actions">';
@@ -913,7 +902,12 @@ function buildEventPopupBlock(event) {
   return html;
 }
 
+/**
+ * Renderöi karttanäkymän Leaflet-kirjastolla.
+ * Ryhmittelee tapahtumat sijainnin mukaan.
+ */
 function renderMap(events) {
+  // Alustetaan kartta ensimmäisellä kerralla
   if (!leafletMap) {
     leafletMap = L.map('events-map').setView([64.0, 26.0], 5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -923,24 +917,25 @@ function renderMap(events) {
     mapMarkers = L.layerGroup().addTo(leafletMap);
   }
 
+  // Pakotetaan kartan koon päivitys
   setTimeout(function() { leafletMap.invalidateSize(); }, 100);
   mapMarkers.clearLayers();
 
-  // Group events by location
+  // Ryhmitellään tapahtumat sijainnin mukaan
   var groups = {};
-  events.forEach(function(event) {
+  $.each(events, function(i, event) {
     if (!event.lat || !event.lon) return;
     var key = event.lat + ',' + event.lon;
     if (!groups[key]) groups[key] = [];
     groups[key].push(event);
   });
 
+  // Luodaan merkit kartalle
   var bounds = [];
-  Object.keys(groups).forEach(function(key) {
-    var group = groups[key];
+  $.each(groups, function(key, group) {
     var first = group[0];
 
-    // Sort: upcoming first (by date), then collect unique series colors
+    // Järjestetään: tulevat ensin, kerätään sarjojen värit
     var sorted = group.slice().sort(function(a, b) {
       var aUp = a.status === 'upcoming' ? 0 : 1;
       var bUp = b.status === 'upcoming' ? 0 : 1;
@@ -949,13 +944,14 @@ function renderMap(events) {
     });
     var seen = {};
     var uniqueColors = [];
-    sorted.forEach(function(e) {
+    $.each(sorted, function(i, e) {
       if (!seen[e.series]) {
         seen[e.series] = true;
         uniqueColors.push(getSeriesColor(e.series));
       }
     });
 
+    // Luodaan merkki sijainnille
     var marker;
     if (uniqueColors.length === 1) {
       marker = L.circleMarker([first.lat, first.lon], {
@@ -967,13 +963,14 @@ function renderMap(events) {
         fillOpacity: first.status === 'past' ? 0.35 : 0.85
       });
     } else {
-      // Reverse so first upcoming color renders last in DOM but gets highest z-index (on top)
+      // Monivärinen merkki useille sarjoille
       var reversed = uniqueColors.slice().reverse();
       var total = reversed.length;
-      var dotsHtml = reversed.map(function(c, i) {
+      var dotsHtml = '';
+      $.each(reversed, function(i, c) {
         var z = i + 1;
-        return '<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:' + c + ';border:2px solid #0d0f0e;margin:0 -5px;position:relative;z-index:' + z + '"></span>';
-      }).join('');
+        dotsHtml += '<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:' + c + ';border:2px solid #0d0f0e;margin:0 -5px;position:relative;z-index:' + z + '"></span>';
+      });
       var dotWidth = 16 + (total - 1) * 6;
       var icon = L.divIcon({
         html: '<div style="display:flex;align-items:center">' + dotsHtml + '</div>',
@@ -984,10 +981,11 @@ function renderMap(events) {
       marker = L.marker([first.lat, first.lon], { icon: icon });
     }
 
+    // Rakennetaan popup-sisältö
     var location = first.location + (first.city ? ' · ' + first.city : '');
     var popupHtml = '<div style="font-family:Outfit,sans-serif;min-width:200px;max-width:280px">'
       + '<div class="map-popup-location" style="margin-bottom:0.5rem;font-weight:600">' + location + '</div>';
-    group.forEach(function(event, i) {
+    $.each(group, function(i, event) {
       if (i > 0) popupHtml += '<hr style="border:none;border-top:1px solid #ddd;margin:0.4rem 0">';
       popupHtml += buildEventPopupBlock(event);
     });
@@ -998,6 +996,7 @@ function renderMap(events) {
     bounds.push([first.lat, first.lon]);
   });
 
+  // Sovitetaan kartan näkymä merkkien mukaan
   if (bounds.length > 0) {
     leafletMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 8 });
   }
@@ -1005,142 +1004,285 @@ function renderMap(events) {
 
 
 // ============================================
-// 11. MOBILE AUTO-COLLAPSE FILTERS ON SCROLL
+// 11. TAPAHTUMAKUUNTELIJAT (jQuery .on())
 // ============================================
 
-(function() {
-  var ticking = false;
+/**
+ * Kaikki tapahtumakuuntelijat sidotaan jQueryn $(document).ready()
+ * -funktiossa, joka suoritetaan kun DOM on valmis.
+ */
+$(document).ready(function() {
 
-  window.addEventListener('scroll', function() {
-    if (window.innerWidth > 600) return;
-    if (filterExpandedByUser) return;
-    if (!ticking) {
-      requestAnimationFrame(function() {
-        if (window.scrollY > 120 && filtersSection.classList.contains('expanded')) {
-          filtersSection.classList.remove('expanded');
-          filterToggleIcon.textContent = '▾';
-        }
-        ticking = false;
+  // Alustetaan Bootstrap-modaalit
+  weatherBsModal  = new bootstrap.Modal($('#weather-modal')[0]);
+  suggestBsModal  = new bootstrap.Modal($('#suggest-modal')[0]);
+  feedbackBsModal = new bootstrap.Modal($('#feedback-modal')[0]);
+
+  // Alustetaan Bootstrap Toast -ilmoitus
+  appToast = new bootstrap.Toast($('#app-toast')[0]);
+
+  // Alustetaan Bootstrap Tooltips kaikille [title]-elementeille
+  $('[title]').each(function() {
+    new bootstrap.Tooltip(this, { trigger: 'hover', placement: 'top' });
+  });
+
+  // Alustetaan AOS (Animate On Scroll) -kirjasto
+  AOS.init({
+    duration: 600,       // animaation kesto (ms)
+    easing: 'ease-out',  // animaation tyyppi
+    once: true,          // animoidaan vain kerran
+    offset: 60           // etäisyys näkymän reunasta ennen animaatiota
+  });
+
+  // --- Hover-hehkuefekti korteille (jQuery mousemove) ---
+  // Seuraa hiiren sijaintia ja luo valohehkun kortin pinnalle
+  $(document).on('mousemove', '.event-card', function(e) {
+    var $card = $(this);
+    var rect = $card[0].getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    var y = e.clientY - rect.top;
+    // Asetetaan CSS-muuttujat hiiren sijainnille
+    $card.css({
+      '--glow-x': x + 'px',
+      '--glow-y': y + 'px'
+    });
+  });
+  $(document).on('mouseleave', '.event-card', function() {
+    // Poistetaan hehku kun hiiri poistuu kortilta
+    $(this).css({ '--glow-x': '-100px', '--glow-y': '-100px' });
+  });
+
+  // --- Segmenttipainikkeet (kisat/tapahtumat/kaikki) ---
+  $(document).on('click', '.segment-btn', function() {
+    setSegment($(this).data('segment'));
+    applyFilters();
+  });
+
+  // --- Monivalintavalikot: avaus/sulkeminen ---
+  $.each(multiSelectDefaults, function(id) {
+    var $container = $('#' + id);
+
+    // Trigger-napin klikkaus avaa/sulkee valikon
+    $container.find('.multi-select-trigger').on('click', function(e) {
+      e.stopPropagation();
+      var isOpen = $container.hasClass('open');
+      // Suljetaan kaikki muut valikot
+      $('.multi-select.open').removeClass('open');
+      if (!isOpen) $container.addClass('open');
+    });
+
+    // Vaihtoehdon klikkaus — valinta/poisto
+    $container.find('.multi-select-option').on('click', function(e) {
+      e.stopPropagation(); // pidetään valikko auki
+      $(this).toggleClass('checked');
+      updateTriggerText(id);
+      applyFilters();
+    });
+  });
+
+  // Suljetaan valikot klikatessa muualle (jQuery-dokumenttikuuntelija)
+  $(document).on('click', function() {
+    $('.multi-select.open').removeClass('open');
+  });
+
+  // --- Järjestysvalinta ---
+  $('#filter-sort').on('change', applyFilters);
+
+  // --- Hakukenttä viiveellä (debounce) ---
+  var searchTimeout = null;
+  $('#filter-search').on('input', function() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(applyFilters, 300);
+  });
+
+  // --- Tyhjennä-nappi ---
+  $('#btn-reset-filters').on('click', function() {
+    resetFilters();
+    showToast('Suodattimet tyhjennetty');
+  });
+
+  // --- Tyhjän tilan resetointilinkki ---
+  $('#empty-reset-link').on('click', function(e) {
+    e.preventDefault();
+    resetFilters();
+  });
+
+  // --- Logo = koti (tyhjennä suodattimet, oletusnäkymä, scroll ylös) ---
+  $('#logo-link').on('click', function(e) {
+    e.preventDefault();
+    resetFilters();
+    if (currentView !== 'cards') {
+      currentView = 'cards';
+      $('#view-cards').addClass('active');
+      $('#view-list, #view-map').removeClass('active');
+      renderEvents(filteredEvents);
+    }
+    // Varmistetaan että suodatinpalkki näkyy (jQuery slideUp voi piilottaa sen)
+    var $inner = $('.filters-inner');
+    $inner.removeAttr('style');
+    $('#filters-section').removeClass('expanded');
+    $('#filter-toggle-icon').html('<i class="bi bi-chevron-down"></i>');
+    // Animoitu scroll ylös jQueryllä
+    $('html, body').animate({ scrollTop: 0 }, 400);
+  });
+
+  // --- Näkymätoggle: Kortit ---
+  $('#view-cards').on('click', function() {
+    if (currentView === 'cards') return;
+    currentView = 'cards';
+    $(this).addClass('active');
+    $('#view-list, #view-map').removeClass('active');
+    renderEvents(filteredEvents);
+  });
+
+  // --- Näkymätoggle: Lista ---
+  $('#view-list').on('click', function() {
+    if (currentView === 'list') return;
+    currentView = 'list';
+    $(this).addClass('active');
+    $('#view-cards, #view-map').removeClass('active');
+    renderEvents(filteredEvents);
+  });
+
+  // --- Näkymätoggle: Kartta ---
+  $('#view-map').on('click', function() {
+    if (currentView === 'map') return;
+    currentView = 'map';
+    $(this).addClass('active');
+    $('#view-cards, #view-list').removeClass('active');
+    renderEvents(filteredEvents);
+  });
+
+  // --- Mobiili: suodattimien toggle (jQuery slideToggle -animaatio) ---
+  $('#filter-toggle').on('click', function() {
+    var $section = $('#filters-section');
+    var $inner = $section.find('.filters-inner');
+    var willExpand = !$section.hasClass('expanded');
+
+    if (willExpand) {
+      // Avataan suodattimet sulavalla slideDown-animaatiolla
+      $section.addClass('expanded');
+      $inner.hide().slideDown(300);
+      filterExpandedByUser = true;
+      clearTimeout(filterGuardTimer);
+      filterGuardTimer = setTimeout(function() { filterExpandedByUser = false; }, 500);
+    } else {
+      // Suljetaan slideUp-animaatiolla
+      $inner.slideUp(250, function() {
+        $section.removeClass('expanded');
       });
-      ticking = true;
+      filterExpandedByUser = false;
+      clearTimeout(filterGuardTimer);
+    }
+    // Vaihdetaan ikonin suunta jQueryllä
+    $('#filter-toggle-icon').html(willExpand ? '<i class="bi bi-chevron-up"></i>' : '<i class="bi bi-chevron-down"></i>');
+  });
+
+  // --- Mobiili: suodattimien automaattinen sulkeutuminen scrollatessa ---
+  $(window).on('scroll', function() {
+    if ($(window).width() > 600) return;
+    if (filterExpandedByUser) return;
+    if ($(window).scrollTop() > 120 && $('#filters-section').hasClass('expanded')) {
+      // Suljetaan jQuery slideUp -animaatiolla
+      $('#filters-section').find('.filters-inner').slideUp(250, function() {
+        $('#filters-section').removeClass('expanded');
+      });
+      $('#filter-toggle-icon').html('<i class="bi bi-chevron-down"></i>');
     }
   });
-})();
 
-
-// ============================================
-// 12. MAP VIEW TOGGLE
-// ============================================
-
-viewMapBtn.addEventListener('click', function() {
-  if (currentView === 'map') return;
-  currentView = 'map';
-  viewMapBtn.classList.add('active');
-  viewCardsBtn.classList.remove('active');
-  viewListBtn.classList.remove('active');
-  renderEvents(filteredEvents);
-});
-
-
-// ============================================
-// 13. SUGGEST EVENT & FEEDBACK FORMS
-// ============================================
-
-function openModal(modal) {
-  var form = modal.querySelector('form');
-  var success = modal.querySelector('.form-success');
-  if (form) { form.reset(); form.classList.remove('hidden'); }
-  if (success) success.classList.add('hidden');
-  modal.querySelector('.form-title').classList.remove('hidden');
-  modal.querySelector('.form-desc').classList.remove('hidden');
-  modal.classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
-}
-function closeModal(modal) {
-  modal.classList.add('hidden');
-  document.body.style.overflow = '';
-}
-
-btnSuggestEvent.addEventListener('click', function() { openModal(suggestModal); });
-btnFeedback.addEventListener('click', function() { openModal(feedbackModal); });
-
-document.getElementById('suggest-modal-close').addEventListener('click', function() {
-  closeModal(suggestModal);
-});
-document.getElementById('feedback-modal-close').addEventListener('click', function() {
-  closeModal(feedbackModal);
-});
-
-suggestModal.addEventListener('click', function(e) {
-  if (e.target === suggestModal) closeModal(suggestModal);
-});
-feedbackModal.addEventListener('click', function(e) {
-  if (e.target === feedbackModal) closeModal(feedbackModal);
-});
-
-document.getElementById('suggest-form').addEventListener('submit', function(e) {
-  e.preventDefault();
-  var form = e.target;
-  var formData = new FormData(form);
-  fetch('/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(formData).toString()
-  }).then(function() {
-    form.classList.add('hidden');
-    suggestModal.querySelector('.form-title').classList.add('hidden');
-    suggestModal.querySelector('.form-desc').classList.add('hidden');
-    document.getElementById('suggest-success').classList.remove('hidden');
-  }).catch(function() {
-    alert('Lähetys epäonnistui. Yritä uudelleen.');
+  // --- Ikkunan koon muutos: poistetaan jQuery inline-tyylit suodattimilta ---
+  // Estää tilanteen jossa mobiilissa slideUp asettaa display:none
+  // ja se jää voimaan desktopiin siirryttäessä
+  $(window).on('resize', function() {
+    if ($(window).width() > 600) {
+      $('.filters-inner').removeAttr('style');
+    }
   });
-});
 
-document.getElementById('feedback-form').addEventListener('submit', function(e) {
-  e.preventDefault();
-  var form = e.target;
-  var formData = new FormData(form);
-  fetch('/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(formData).toString()
-  }).then(function() {
-    form.classList.add('hidden');
-    feedbackModal.querySelector('.form-title').classList.add('hidden');
-    feedbackModal.querySelector('.form-desc').classList.add('hidden');
-    document.getElementById('feedback-success').classList.remove('hidden');
-  }).catch(function() {
-    alert('Lähetys epäonnistui. Yritä uudelleen.');
+  // --- Ehdota tapahtumaa -nappi (avaa Bootstrap-modaalin) ---
+  $('#btn-suggest-event').on('click', function() {
+    // Nollataan lomake jQueryllä
+    $('#suggest-form')[0].reset();
+    $('#suggest-form').removeClass('d-none');
+    $('#suggest-success').addClass('d-none');
+    suggestBsModal.show();
   });
+
+  // --- Palaute-nappi ---
+  $('#btn-feedback').on('click', function() {
+    $('#feedback-form')[0].reset();
+    $('#feedback-form').removeClass('d-none');
+    $('#feedback-success').addClass('d-none');
+    feedbackBsModal.show();
+  });
+
+  // --- Ehdotuslomakkeen lähetys (jQuery AJAX) ---
+  $('#suggest-form').on('submit', function(e) {
+    e.preventDefault();
+    var $form = $(this);
+    // Lähetetään lomaketiedot jQuery AJAX -kutsulla
+    $.ajax({
+      url: '/',
+      method: 'POST',
+      contentType: 'application/x-www-form-urlencoded',
+      data: $form.serialize()
+    }).done(function() {
+      // Näytetään onnistumisviesti
+      $form.addClass('d-none');
+      $('#suggest-success').removeClass('d-none');
+    }).fail(function() {
+      alert('Lähetys epäonnistui. Yritä uudelleen.');
+    });
+  });
+
+  // --- Palautelomakkeen lähetys (jQuery AJAX) ---
+  $('#feedback-form').on('submit', function(e) {
+    e.preventDefault();
+    var $form = $(this);
+    $.ajax({
+      url: '/',
+      method: 'POST',
+      contentType: 'application/x-www-form-urlencoded',
+      data: $form.serialize()
+    }).done(function() {
+      $form.addClass('d-none');
+      $('#feedback-success').removeClass('d-none');
+    }).fail(function() {
+      alert('Lähetys epäonnistui. Yritä uudelleen.');
+    });
+  });
+
+  // --- Ehdotuslomake: asetetaan loppupäivä automaattisesti alkupäivän mukaan ---
+  $('#suggest-date-start').on('change', function() {
+    var val = $(this).val();
+    var $endInput = $('#suggest-date-end');
+    if (val && val.length === 10 && parseInt(val.split('-')[0], 10) >= 2000 && !$endInput.val()) {
+      $endInput.val(val);
+    }
+  });
+
+  // --- Takaisin ylös -nappi (jQuery .fadeIn/.fadeOut + .animate scroll) ---
+  var $backToTop = $('#btn-back-to-top');
+  // Piilotetaan aluksi jQueryllä (ei d-none, jotta fadeIn/fadeOut toimii)
+  $backToTop.removeClass('d-none').hide();
+  $(window).on('scroll', function() {
+    // Näytetään nappi kun scrollataan yli 400px alas
+    if ($(window).scrollTop() > 400) {
+      $backToTop.fadeIn(300);
+    } else {
+      $backToTop.fadeOut(300);
+    }
+  });
+  $backToTop.on('click', function() {
+    // Animoitu smooth scroll ylös jQueryn .animate()-metodilla
+    $('html, body').animate({ scrollTop: 0 }, 500);
+  });
+
+  // --- Esivalitaan "Tulevat"-tila oletuksena ---
+  $('#filter-status .multi-select-option[data-value="upcoming"]').addClass('checked');
+  updateTriggerText('filter-status');
+
+  // --- Ladataan tapahtumat AJAX-kutsulla ---
+  loadEvents();
 });
-
-document.getElementById('suggest-date-start').addEventListener('change', function() {
-  var endInput = document.getElementById('suggest-date-end');
-  var val = this.value;
-  if (val && val.length === 10 && parseInt(val.split('-')[0], 10) >= 2000 && !endInput.value) {
-    endInput.value = val;
-  }
-});
-
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') {
-    if (!suggestModal.classList.contains('hidden')) closeModal(suggestModal);
-    if (!feedbackModal.classList.contains('hidden')) closeModal(feedbackModal);
-  }
-});
-
-
-// ============================================
-// 14. INITIALIZE APP
-// ============================================
-
-// Pre-select "Tulevat" (upcoming) status filter so users see future events first
-(function() {
-  var upcomingOption = document.querySelector('#filter-status .multi-select-option[data-value="upcoming"]');
-  if (upcomingOption) {
-    upcomingOption.classList.add('checked');
-    updateTriggerText('filter-status');
-  }
-})();
-
-loadEvents();
