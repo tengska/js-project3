@@ -6,7 +6,7 @@ Selainpohjainen sovellus, joka kokoaa Suomen gravity-maastopyöräilytapahtumat 
 
 ## Demo
 
-[Katso videodemo](https://youtu.be/PLACEHOLDER)
+[Katso videodemo](https://video.laurea.fi/media/Videoesittely%3A+JS+kurssin+kolmas+projekti+%28GravityCal-sovelluksen+jatkokehitys%29/0_8gx3s0h7)
 
 ## Sovelluksen linkki
 
@@ -125,7 +125,7 @@ Axios olisi järkevä valinta projektissa, jossa ei käytetä jQueryä — sillo
 | UI-kirjasto (Bootstrap) | 1 | Bootstrap 5: modaalit, napit, lomakkeet, grid, spinner, ikonit |
 | Koodi GitHubissa | 1 | Julkaistu GitHubissa: [github.com/tengska/js-project3](https://github.com/tengska/js-project3) |
 | Sovellus Netlifyssä | 1 | Julkaistu Netlifyssä: [karlanjsprojekti3.netlify.app](https://karlanjsprojekti3.netlify.app) |
-| Videodemo | 1 | [Katso video](https://youtu.be/PLACEHOLDER) |
+| Videodemo | 1 | [Katso video](https://video.laurea.fi/media/Videoesittely%3A+JS+kurssin+kolmas+projekti+%28GravityCal-sovelluksen+jatkokehitys%29/0_8gx3s0h7) |
 | Projektiraportti ja README | 2 | Tämä tiedosto |
 | **Yhteensä** | **10** | |
 
