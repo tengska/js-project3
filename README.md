@@ -85,6 +85,16 @@ Selainpohjainen sovellus, joka kokoaa Suomen gravity-maastopyöräilytapahtumat 
 2. **Open-Meteo Forecast API** — `https://api.open-meteo.com/v1/forecast` (`$.ajax`)
 3. **Open-Meteo Archive API** — `https://archive-api.open-meteo.com/v1/archive` (`$.ajax`)
 
+### Miksi jQuery AJAX eikä Axios?
+
+Tehtävässä ehdotettiin Axiosta AJAX-kutsuihin. Tässä projektissa jQuery `$.ajax`/`$.getJSON` on perustellumpi valinta:
+
+- **Ei ylimääräisiä riippuvuuksia** — jQuery on jo ladattu DOM-käsittelyä varten, joten `$.ajax` tulee mukana ilman lisäkirjastoja. Axios lisäisi ~15 KB ylimääräistä koodia pelkästään HTTP-kutsuja varten.
+- **Yhdenmukainen koodi** — koko sovellus käyttää jQueryä, joten on luontevaa käyttää myös sen AJAX-metodeja. Kahden eri kirjaston käyttö samaan asiaan (HTTP-kutsut) ei ole hyvä käytäntö.
+- **Täyttää tehtävän vaatimuksen** — tehtävässä sanotaan *"esim. AJAX-kutsut tehdään Axiosin avulla"*, eli Axios on yksi esimerkki, ei pakollinen. jQuery `$.ajax` korvaa natiivin `fetch`-kutsun ulkoisen kirjaston avulla, mikä on tehtävän ydinajatus.
+
+Axios olisi järkevä valinta projektissa, jossa ei käytetä jQueryä — silloin se korvaisi natiivin `fetch`in siistimmällä API:lla.
+
 ## Tietolähteet
 
 | Sarja | Lähde |
