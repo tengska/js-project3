@@ -4,6 +4,10 @@ Selainpohjainen sovellus, joka kokoaa Suomen gravity-maastopyöräilytapahtumat 
 
 **Projekti 3:** JS-sovellus ulkoisia kirjastoja käyttäen.
 
+## Demo
+
+[Katso videodemo](https://video.laurea.fi/media/Videoesittely%3A+JS+kurssin+kolmas+projekti+%28GravityCal-sovelluksen+jatkokehitys%29/0_8gx3s0h7)
+
 ## Sovelluksen linkki
 
 - GitHub: [tengska/js-project3](https://github.com/tengska/js-project3)
@@ -81,6 +85,16 @@ Selainpohjainen sovellus, joka kokoaa Suomen gravity-maastopyöräilytapahtumat 
 2. **Open-Meteo Forecast API** — `https://api.open-meteo.com/v1/forecast` (`$.ajax`)
 3. **Open-Meteo Archive API** — `https://archive-api.open-meteo.com/v1/archive` (`$.ajax`)
 
+### Miksi jQuery AJAX eikä Axios?
+
+Tehtävässä ehdotettiin Axiosta AJAX-kutsuihin. Tässä projektissa jQuery `$.ajax`/`$.getJSON` on perustellumpi valinta:
+
+- **Ei ylimääräisiä riippuvuuksia** — jQuery on jo ladattu DOM-käsittelyä varten, joten `$.ajax` tulee mukana ilman lisäkirjastoja. Axios lisäisi ~15 KB ylimääräistä koodia pelkästään HTTP-kutsuja varten.
+- **Yhdenmukainen koodi** — koko sovellus käyttää jQueryä, joten on luontevaa käyttää myös sen AJAX-metodeja. Kahden eri kirjaston käyttö samaan asiaan (HTTP-kutsut) ei ole hyvä käytäntö.
+- **Täyttää tehtävän vaatimuksen** — tehtävässä sanotaan *"esim. AJAX-kutsut tehdään Axiosin avulla"*, eli Axios on yksi esimerkki, ei pakollinen. jQuery `$.ajax` korvaa natiivin `fetch`-kutsun ulkoisen kirjaston avulla, mikä on tehtävän ydinajatus.
+
+Axios olisi järkevä valinta projektissa, jossa ei käytetä jQueryä — silloin se korvaisi natiivin `fetch`in siistimmällä API:lla.
+
 ## Tietolähteet
 
 | Sarja | Lähde |
@@ -111,7 +125,7 @@ Selainpohjainen sovellus, joka kokoaa Suomen gravity-maastopyöräilytapahtumat 
 | UI-kirjasto (Bootstrap) | 1 | Bootstrap 5: modaalit, napit, lomakkeet, grid, spinner, ikonit |
 | Koodi GitHubissa | 1 | Julkaistu GitHubissa: [github.com/tengska/js-project3](https://github.com/tengska/js-project3) |
 | Sovellus Netlifyssä | 1 | Julkaistu Netlifyssä: [karlanjsprojekti3.netlify.app](https://karlanjsprojekti3.netlify.app) |
-| Videodemo | 1 | (Tehdään erikseen) |
+| Videodemo | 1 | [Katso video](https://video.laurea.fi/media/Videoesittely%3A+JS+kurssin+kolmas+projekti+%28GravityCal-sovelluksen+jatkokehitys%29/0_8gx3s0h7) |
 | Projektiraportti ja README | 2 | Tämä tiedosto |
 | **Yhteensä** | **10** | |
 

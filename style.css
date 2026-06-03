@@ -476,6 +476,7 @@ a:hover {
   padding: 0.2rem 0.5rem;
   border-radius: 3px;
   margin-bottom: 0.6rem;
+  text-align: left;
 }
 .card-series.series-dh {
   background: rgba(180, 247, 74, 0.15) !important;
@@ -665,7 +666,7 @@ a:hover {
   border-radius: var(--radius-sm);
   padding: 0.7rem 1rem;
   display: grid;
-  grid-template-columns: 150px 100px minmax(0, 1fr) 200px;
+  grid-template-columns: 150px 130px minmax(0, 1fr) 200px;
   align-items: center;
   gap: 0.85rem;
   transition: background 0.2s, border-color 0.2s;
@@ -705,9 +706,9 @@ a:hover {
   letter-spacing: 0.06em;
   padding: 0.2rem 0.4rem;
   border-radius: 3px;
-  text-align: center;
+  text-align: left;
   white-space: normal;
-  word-break: break-word;
+  overflow-wrap: break-word;
   line-height: 1.2;
 }
 .row-info {
@@ -1005,8 +1006,10 @@ a:hover {
   /* Listanäkymä piilossa mobiilissa */
   #view-list { display: none; }
 
-  /* Mobiili: kortin napit 2×2-ruudukko */
+  /* Mobiili: kortin napit yhdelle riville, täyttävät koko leveyden */
   .card-actions .btn {
-    flex: 1 0 calc(50% - 0.2rem);
+    flex: 1 1 0;
+    font-size: 0.6rem;
+    padding: 0.3rem 0.4rem;
   }
 }

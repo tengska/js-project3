@@ -109,7 +109,7 @@ function loadEvents() {
  */
 function fetchWeather(lat, lon, dateStart, dateEnd) {
   // Tarkistetaan löytyykö data välimuistista
-  var cacheKey = lat + ',' + lon + ',' + dateStart;
+  var cacheKey = lat + ',' + lon + ',' + dateStart + ',' + dateEnd;
   if (weatherCache[cacheKey]) {
     // Palautetaan välimuistista jQuery Deferred -objektina
     return $.Deferred().resolve(weatherCache[cacheKey]).promise();
@@ -144,7 +144,7 @@ function fetchHistoricalWeather(lat, lon, dateStart, dateEnd) {
   var lastYearStart = dateStart.replace(startYear, startYear - 1);
   var lastYearEnd = dateEnd.replace(new Date(dateEnd).getFullYear(), startYear - 1);
 
-  var cacheKey = 'hist-' + lat + ',' + lon + ',' + lastYearStart;
+  var cacheKey = 'hist-' + lat + ',' + lon + ',' + lastYearStart + ',' + lastYearEnd;
   if (weatherCache[cacheKey]) {
     return $.Deferred().resolve(weatherCache[cacheKey]).promise();
   }
@@ -425,9 +425,12 @@ function renderEvents(events) {
   if (typeof AOS !== 'undefined') AOS.refresh();
 
   // Alustetaan Bootstrap Tooltips uusille dynaamisille elementeille
-  $('#events-grid [title]').each(function() {
-    new bootstrap.Tooltip(this, { trigger: 'hover', placement: 'top' });
-  });
+  // Mobiilissa (kosketusnäyttö) ei käytetä tooltippejä — hover ei toimi järkevästi
+  if (!('ontouchstart' in window)) {
+    $('#events-grid [title]').each(function() {
+      new bootstrap.Tooltip(this, { trigger: 'hover', placement: 'top' });
+    });
+  }
 
   // Käynnistetään sään pikakuvausten lataus
   processWeatherQueue(0);
@@ -1018,13 +1021,21 @@ $(document).ready(function() {
   suggestBsModal  = new bootstrap.Modal($('#suggest-modal')[0]);
   feedbackBsModal = new bootstrap.Modal($('#feedback-modal')[0]);
 
+  // Piilotetaan kaikki tooltipit kun modaali avautuu (estää mobiili-tooltip-jäämisen)
+  $('.modal').on('show.bs.modal', function() {
+    $('.tooltip').remove();
+  });
+
   // Alustetaan Bootstrap Toast -ilmoitus
   appToast = new bootstrap.Toast($('#app-toast')[0]);
 
   // Alustetaan Bootstrap Tooltips kaikille [title]-elementeille
-  $('[title]').each(function() {
-    new bootstrap.Tooltip(this, { trigger: 'hover', placement: 'top' });
-  });
+  // Mobiilissa (kosketusnäyttö) ei käytetä tooltippejä — hover ei toimi järkevästi
+  if (!('ontouchstart' in window)) {
+    $('[title]').each(function() {
+      new bootstrap.Tooltip(this, { trigger: 'hover', placement: 'top' });
+    });
+  }
 
   // Alustetaan AOS (Animate On Scroll) -kirjasto
   AOS.init({
