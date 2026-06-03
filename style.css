@@ -1005,9 +1005,9 @@ a:hover {
   /* Listanäkymä piilossa mobiilissa */
   #view-list { display: none; }
 
-  /* Mobiili: kortin napit yhdelle riville */
+  /* Mobiili: kortin napit yhdelle riville, täyttävät koko leveyden */
   .card-actions .btn {
-    flex: 0 1 auto;
+    flex: 1 1 0;
     font-size: 0.6rem;
     padding: 0.3rem 0.4rem;
   }
