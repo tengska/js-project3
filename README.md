@@ -4,6 +4,10 @@ Selainpohjainen sovellus, joka kokoaa Suomen gravity-maastopyöräilytapahtumat 
 
 **Projekti 3:** JS-sovellus ulkoisia kirjastoja käyttäen.
 
+## Demo
+
+[Katso videodemo](https://youtu.be/PLACEHOLDER)
+
 ## Sovelluksen linkki
 
 - GitHub: [tengska/js-project3](https://github.com/tengska/js-project3)
@@ -111,7 +115,7 @@ Selainpohjainen sovellus, joka kokoaa Suomen gravity-maastopyöräilytapahtumat 
 | UI-kirjasto (Bootstrap) | 1 | Bootstrap 5: modaalit, napit, lomakkeet, grid, spinner, ikonit |
 | Koodi GitHubissa | 1 | Julkaistu GitHubissa: [github.com/tengska/js-project3](https://github.com/tengska/js-project3) |
 | Sovellus Netlifyssä | 1 | Julkaistu Netlifyssä: [karlanjsprojekti3.netlify.app](https://karlanjsprojekti3.netlify.app) |
-| Videodemo | 1 | (Tehdään erikseen) |
+| Videodemo | 1 | [Katso video](https://youtu.be/PLACEHOLDER) |
 | Projektiraportti ja README | 2 | Tämä tiedosto |
 | **Yhteensä** | **10** | |
 
