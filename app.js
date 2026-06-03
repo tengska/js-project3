@@ -425,9 +425,12 @@ function renderEvents(events) {
   if (typeof AOS !== 'undefined') AOS.refresh();
 
   // Alustetaan Bootstrap Tooltips uusille dynaamisille elementeille
-  $('#events-grid [title]').each(function() {
-    new bootstrap.Tooltip(this, { trigger: 'hover', placement: 'top' });
-  });
+  // Mobiilissa (kosketusnäyttö) ei käytetä tooltippejä — hover ei toimi järkevästi
+  if (!('ontouchstart' in window)) {
+    $('#events-grid [title]').each(function() {
+      new bootstrap.Tooltip(this, { trigger: 'hover', placement: 'top' });
+    });
+  }
 
   // Käynnistetään sään pikakuvausten lataus
   processWeatherQueue(0);
@@ -1018,13 +1021,21 @@ $(document).ready(function() {
   suggestBsModal  = new bootstrap.Modal($('#suggest-modal')[0]);
   feedbackBsModal = new bootstrap.Modal($('#feedback-modal')[0]);
 
+  // Piilotetaan kaikki tooltipit kun modaali avautuu (estää mobiili-tooltip-jäämisen)
+  $('.modal').on('show.bs.modal', function() {
+    $('.tooltip').remove();
+  });
+
   // Alustetaan Bootstrap Toast -ilmoitus
   appToast = new bootstrap.Toast($('#app-toast')[0]);
 
   // Alustetaan Bootstrap Tooltips kaikille [title]-elementeille
-  $('[title]').each(function() {
-    new bootstrap.Tooltip(this, { trigger: 'hover', placement: 'top' });
-  });
+  // Mobiilissa (kosketusnäyttö) ei käytetä tooltippejä — hover ei toimi järkevästi
+  if (!('ontouchstart' in window)) {
+    $('[title]').each(function() {
+      new bootstrap.Tooltip(this, { trigger: 'hover', placement: 'top' });
+    });
+  }
 
   // Alustetaan AOS (Animate On Scroll) -kirjasto
   AOS.init({
