@@ -1005,8 +1005,10 @@ a:hover {
   /* Listanäkymä piilossa mobiilissa */
   #view-list { display: none; }
 
-  /* Mobiili: kortin napit 2×2-ruudukko */
+  /* Mobiili: kortin napit yhdelle riville */
   .card-actions .btn {
-    flex: 1 0 calc(50% - 0.2rem);
+    flex: 0 1 auto;
+    font-size: 0.6rem;
+    padding: 0.3rem 0.4rem;
   }
 }
