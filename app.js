@@ -109,7 +109,7 @@ function loadEvents() {
  */
 function fetchWeather(lat, lon, dateStart, dateEnd) {
   // Tarkistetaan löytyykö data välimuistista
-  var cacheKey = lat + ',' + lon + ',' + dateStart;
+  var cacheKey = lat + ',' + lon + ',' + dateStart + ',' + dateEnd;
   if (weatherCache[cacheKey]) {
     // Palautetaan välimuistista jQuery Deferred -objektina
     return $.Deferred().resolve(weatherCache[cacheKey]).promise();
@@ -144,7 +144,7 @@ function fetchHistoricalWeather(lat, lon, dateStart, dateEnd) {
   var lastYearStart = dateStart.replace(startYear, startYear - 1);
   var lastYearEnd = dateEnd.replace(new Date(dateEnd).getFullYear(), startYear - 1);
 
-  var cacheKey = 'hist-' + lat + ',' + lon + ',' + lastYearStart;
+  var cacheKey = 'hist-' + lat + ',' + lon + ',' + lastYearStart + ',' + lastYearEnd;
   if (weatherCache[cacheKey]) {
     return $.Deferred().resolve(weatherCache[cacheKey]).promise();
   }

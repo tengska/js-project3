@@ -706,7 +706,7 @@ a:hover {
   letter-spacing: 0.06em;
   padding: 0.2rem 0.4rem;
   border-radius: 3px;
-  text-align: center;
+  text-align: left;
   white-space: normal;
   overflow-wrap: break-word;
   line-height: 1.2;
