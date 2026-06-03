@@ -476,6 +476,7 @@ a:hover {
   padding: 0.2rem 0.5rem;
   border-radius: 3px;
   margin-bottom: 0.6rem;
+  text-align: left;
 }
 .card-series.series-dh {
   background: rgba(180, 247, 74, 0.15) !important;
@@ -665,7 +666,7 @@ a:hover {
   border-radius: var(--radius-sm);
   padding: 0.7rem 1rem;
   display: grid;
-  grid-template-columns: 150px 100px minmax(0, 1fr) 200px;
+  grid-template-columns: 150px 130px minmax(0, 1fr) 200px;
   align-items: center;
   gap: 0.85rem;
   transition: background 0.2s, border-color 0.2s;
@@ -707,7 +708,7 @@ a:hover {
   border-radius: 3px;
   text-align: center;
   white-space: normal;
-  word-break: break-word;
+  overflow-wrap: break-word;
   line-height: 1.2;
 }
 .row-info {
